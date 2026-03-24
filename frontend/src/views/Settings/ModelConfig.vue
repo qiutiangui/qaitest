@@ -53,7 +53,7 @@ const llmProviders = [
   { value: 'qwen', label: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-turbo', 'qwen-plus', 'qwen-max'] },
   { value: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'] },
   { value: 'anthropic', label: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'] },
-  { value: 'ollama', label: 'Ollama (本地)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral', 'phi3'] },
+  { value: 'ollama', label: 'Ollama (本地)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'llama3.1', 'mistral', 'phi3', 'qwen2.5:7b', 'qwen2.5:14b', 'qwen2.5:32b', 'codellama:7b', 'codellama:13b'] },
   { value: 'custom', label: '自定义', baseUrl: '', models: [] },
 ]
 

@@ -24,11 +24,32 @@ const projectStore = useProjectStore()
 const requirementStore = useRequirementStore()
 const testcaseStore = useTestcaseStore()
 
+// 配置 marked 选项（支持代码块高亮）
+marked.setOptions({
+  gfm: true,  // GitHub Flavored Markdown
+  breaks: true,  // 换行符转换为 <br>
+})
+
+// DOMPurify 配置（允许代码块相关标签）
+const DOMPURIFY_CONFIG = {
+  ALLOWED_TAGS: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'hr',
+    'ul', 'ol', 'li',
+    'blockquote', 'pre', 'code',
+    'strong', 'em', 'del', 's',
+    'a', 'img',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'div', 'span',
+  ],
+  ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id'],
+}
+
 // Markdown渲染函数
 const renderMarkdown = (content: string): string => {
   if (!content) return ''
   const html = marked.parse(content, { async: false }) as string
-  return DOMPurify.sanitize(html)
+  return DOMPurify.sanitize(html, DOMPURIFY_CONFIG)
 }
 
 // Tab切换：手动输入 | 文档上传 | 飞书文档
@@ -1063,6 +1084,11 @@ const copyLogs = async () => {
 
 // 获取步骤状态（completed/active/pending）
 const getStepStatus = (phase: number, stepInPhase: number): string => {
+  // 如果任务已完成，所有步骤都显示为 completed
+  if (generationComplete.value) {
+    return 'completed'
+  }
+
   if (!activeAgent.value) return 'pending'
 
   const config = agentConfig[activeAgent.value]
@@ -1900,9 +1926,24 @@ const formatDateTime = (timestamp: string): string => {
               </div>
               -->
 
-              <!-- Markdown内容（豆包风格） -->
+              <!-- 流式输出内容（统一渲染 Markdown） -->
+              <!-- 支持所有 Agent 类型的 Markdown 渲染 -->
               <div 
-                v-if="log.content && !log.content.includes('```') && (log.agent === 'AI分析' || log.agent === '需求获取')"
+                v-if="log.content && (log.type === 'stream' || log.type === 'stream_start' || log.type === 'stream_end')"
+                class="text-xs text-gray-700 prose prose-xs max-w-none"
+                v-html="renderMarkdown(log.content)"
+              ></div>
+              
+              <!-- 非流式输出：AI分析/需求获取使用 Markdown 渲染 -->
+              <div 
+                v-else-if="log.content && (log.agent === 'AI分析' || log.agent === '需求获取') && !log.content.includes('```')"
+                class="text-xs text-gray-700 prose prose-xs max-w-none"
+                v-html="renderMarkdown(log.content)"
+              ></div>
+              
+              <!-- 非流式输出：评审/生成类 Agent 渲染 Markdown（支持代码块） -->
+              <div 
+                v-else-if="log.content && (log.agent === '用例评审' || log.agent === '用例生成' || log.agent === '格式优化')"
                 class="text-xs text-gray-700 prose prose-xs max-w-none"
                 v-html="renderMarkdown(log.content)"
               ></div>
