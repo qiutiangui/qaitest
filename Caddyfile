@@ -1,0 +1,9 @@
+{
+	email {$SSL_EMAIL}
+}
+
+{$DOMAIN} {
+	reverse_proxy /api/* backend:8000
+	reverse_proxy /ws/* backend:8000
+	reverse_proxy frontend:80
+}

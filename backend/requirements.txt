@@ -1,0 +1,50 @@
+# FastAPI框架
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+
+# 数据库
+tortoise-orm[aiomysql]==0.22.0
+aerich==0.8.1
+
+# 数据验证
+pydantic==2.12.5
+pydantic-settings==2.6.0
+
+# 日志
+loguru==0.7.2
+
+# RAG相关 - LlamaIndex
+llama-index-core==0.14.18
+llama-index-readers-file==0.6.0
+llama-index-vector-stores-milvus==1.1.0
+llama-index-embeddings-openai==0.6.0
+pymilvus>=2.4.0
+
+# 文档解析增强
+pymupdf>=1.24.0
+docx2txt>=0.8
+
+# LLM和Embedding
+openai>=1.108.1
+dashscope==1.20.0
+
+# AutoGen多智能体
+autogen-agentchat==0.7.5
+autogen-core==0.7.5
+autogen-ext==0.7.5
+
+# 报告生成
+weasyprint>=60.0
+jinja2>=3.1.0
+python-docx==1.1.2
+openpyxl==3.1.5
+
+# 工具
+python-dotenv==1.0.1
+httpx==0.27.2
+nest-asyncio==1.6.0
+
+# 测试
+pytest==8.4.1
+pytest-asyncio==0.24.0

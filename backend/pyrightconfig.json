@@ -1,0 +1,10 @@
+{
+  "include": ["app"],
+  "exclude": ["**/node_modules", "**/__pycache__"],
+  "typeCheckingMode": "standard",
+  "reportImplicitRelativeImport": false,
+  "reportAttributeAccessIssue": "warning",
+  "reportMissingTypeArgument": "warning",
+  "reportDeprecated": "warning",
+  "pythonVersion": "3.10"
+}

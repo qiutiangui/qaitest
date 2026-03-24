@@ -1,0 +1,73 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qaitest-backend
+    restart: always
+    env_file:
+      - .env
+    networks:
+      - qaitest-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: qaitest-frontend
+    restart: always
+    depends_on:
+      - backend
+    networks:
+      - qaitest-network
+
+  caddy:
+    image: caddy:latest
+    container_name: qaitest-caddy
+    restart: always
+    profiles:
+      - prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - DOMAIN=${DOMAIN}
+      - SSL_EMAIL=${SSL_EMAIL}
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - qaitest-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: qaitest-nginx
+    restart: always
+    profiles:
+      - dev
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - qaitest-network
+
+networks:
+  qaitest-network:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
