@@ -7,6 +7,7 @@ import useTestcaseStore from '@/stores/testcase'
 import useProjectStore from '@/stores/project'
 import testcaseApi from '@/api/testcase'
 import type { TestCaseUpdate } from '@/types/testcase'
+import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const testcaseStore = useTestcaseStore()
@@ -310,7 +311,7 @@ onMounted(async () => {
             </td>
             <td class="py-3 px-4 text-text-secondary">{{ testcase.creator }}</td>
             <td class="py-3 px-4 text-text-secondary">
-              {{ new Date(testcase.created_at).toLocaleDateString() }}
+              {{ formatDateTime(testcase.created_at) }}
             </td>
             <td class="py-3 px-4">
               <div class="flex items-center gap-2">

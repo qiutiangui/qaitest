@@ -576,9 +576,11 @@ async def push_to_websocket(
     """推送消息到WebSocket"""
     try:
         from app.api.websocket import push_agent_message
+        # 添加调试日志
+        logger.info(f"[WebSocket推送] task_id={task_id}, agent={agent_name}, type={message_type}, content_len={len(content) if content else 0}")
         await push_agent_message(task_id, agent_name, content, message_type, extra_data)
     except Exception as e:
-        logger.warning(f"WebSocket推送失败: {e}, task_id={task_id}")
+        logger.error(f"WebSocket推送失败: {e}, task_id={task_id}, agent={agent_name}")
 
 
 def create_assistant_agent(

@@ -65,6 +65,7 @@ class RequirementOutputMessage(BaseModel):
     project_id: Optional[int] = Field(None, description="项目ID")
     version_id: Optional[int] = Field(default=None, description="版本ID")
     requirements: List[Dict[str, Any]] = Field(default_factory=list, description="功能点列表")
+    chunk_count: int = Field(default=0, description="文档分块数量")
 
 
 class RequirementCompleteMessage(BaseModel):

@@ -5,6 +5,7 @@ import useTestreportStore from '@/stores/testreport'
 import useTestplanStore from '@/stores/testplan'
 import useProjectStore from '@/stores/project'
 import { useRouter } from 'vue-router'
+import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const testreportStore = useTestreportStore()
@@ -222,7 +223,7 @@ onMounted(async () => {
             {{ report.status }}
           </span>
           <span class="text-xs text-text-placeholder">
-            {{ new Date(report.created_at).toLocaleDateString() }}
+            {{ formatDateTime(report.created_at) }}
           </span>
         </div>
       </div>

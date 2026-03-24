@@ -9,6 +9,7 @@ import useTestcaseStore from '@/stores/testcase'
 import useVersionStore from '@/stores/version'
 import { testcaseApi } from '@/api/testcase'
 import type { Requirement, RequirementCreate, RequirementUpdate } from '@/types/requirement'
+import { formatDateTime } from '@/utils/date'
 import DetailCard from '@/components/detail/DetailCard.vue'
 import EditableField from '@/components/detail/EditableField.vue'
 import StatusBadge from '@/components/detail/StatusBadge.vue'
@@ -552,7 +553,7 @@ watch(selectedProject, () => {
                 <span v-else class="text-text-placeholder">-</span>
               </td>
               <td class="py-3 px-4 text-sm text-text-secondary">
-                {{ new Date(req.created_at).toLocaleDateString() }}
+                {{ formatDateTime(req.created_at) }}
               </td>
               <td class="py-3 px-4">
                 <div class="flex items-center justify-end gap-2">
@@ -686,11 +687,11 @@ watch(selectedProject, () => {
               </div>
               <div>
                 <label class="block text-sm font-medium text-text-secondary mb-2">创建时间</label>
-                <p class="text-text-primary">{{ new Date(detailRequirement.created_at).toLocaleDateString() }}</p>
+                <p class="text-text-primary">{{ formatDateTime(detailRequirement.created_at) }}</p>
               </div>
               <div>
                 <label class="block text-sm font-medium text-text-secondary mb-2">更新时间</label>
-                <p class="text-text-primary">{{ new Date(detailRequirement.updated_at).toLocaleDateString() }}</p>
+                <p class="text-text-primary">{{ formatDateTime(detailRequirement.updated_at) }}</p>
               </div>
             </div>
           </DetailCard>

@@ -156,6 +156,8 @@ async def get_testcases_by_ids(ids: list[int] = Body(..., embed=True)):
         steps = await TestStep.filter(test_case_id=tc.id).order_by("step_number")
         step_responses = [TestStepResponse.model_validate(s) for s in steps]
 
+        # 先将 steps 设为空列表，避免 Pydantic 验证失败
+        tc.steps = []
         response_data = TestCaseResponse.model_validate(tc)
         response_data.requirement_name = requirement_name
         response_data.steps = step_responses

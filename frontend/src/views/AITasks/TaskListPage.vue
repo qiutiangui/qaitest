@@ -9,6 +9,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import useProjectStore from '@/stores/project'
+import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -41,6 +42,7 @@ interface TaskRecord {
   phases_summary: PhaseSummary[]
   total_count: number
   saved_count: number
+  doc_chunk_count: number
   error_message?: string
   created_at: string
   started_at?: string
@@ -534,10 +536,11 @@ watch([filterStatus], () => {
             
             <!-- 底部信息 -->
             <div class="flex items-center gap-4 text-sm text-gray-400">
-              <span>{{ formatTime(task.created_at) }}</span>
+              <span>{{ formatDateTime(task.created_at) }}</span>
               <span v-if="task.saved_count > 0">保存 {{ task.saved_count }}
                 <template v-if="task.total_count"> / {{ task.total_count }}</template>
               </span>
+              <span v-if="task.doc_chunk_count > 0" class="text-purple-500">文档切片 {{ task.doc_chunk_count }}</span>
               <span v-if="task.status === 'failed' && task.error_message" class="text-red-500 truncate max-w-xs">
                 {{ task.error_message }}
               </span>

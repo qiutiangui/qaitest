@@ -103,7 +103,19 @@ mysql -h <数据库地址> -u root -p
 CREATE DATABASE qaitest CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 5. 后端启动
+### 5. 启动 Milvus 向量数据库
+
+```bash
+# 方式一：Docker 启动（推荐，每次重启后需重新执行）
+docker-compose -f docker-compose-milvus.yml up -d
+
+# 验证 Milvus 运行状态
+docker ps --filter "name=milvus"
+```
+
+> **注意**：Milvus 是 Docker 部署的，每次重启电脑后需要重新执行上述命令启动 Milvus。
+
+### 6. 后端启动
 
 ```bash
 cd backend
@@ -112,7 +124,7 @@ python init_db.py  # 首次运行，初始化数据表
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 6. 前端启动
+### 7. 前端启动
 
 ```bash
 cd frontend

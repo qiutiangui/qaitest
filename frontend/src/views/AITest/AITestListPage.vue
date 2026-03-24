@@ -9,6 +9,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import aiTestApi from '@/api/aiTest'
 import useProjectStore from '@/stores/project'
+import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -579,7 +580,7 @@ watch([filterStatus], () => {
             
             <!-- 底部信息 -->
             <div class="flex items-center gap-4 text-sm text-gray-400">
-              <span>{{ formatTime(task.created_at) }}</span>
+              <span>{{ formatDateTime(task.created_at) }}</span>
               <span v-if="task.status === 'failed' && task.error_message" class="text-red-500 truncate max-w-xs">
                 {{ task.error_message }}
               </span>

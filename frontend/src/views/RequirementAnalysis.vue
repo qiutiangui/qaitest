@@ -8,6 +8,7 @@ import useVersionStore from '@/stores/version'
 import useRequirementStore from '@/stores/requirement'
 import { requirementApi } from '@/api/requirement'
 import { aiTasksApi } from '@/api/aiTasks'
+import { formatDateTime } from '@/utils/date'
 import type { Project } from '@/types/project'
 import type { Requirement } from '@/types/requirement'
 
@@ -701,7 +702,7 @@ onUnmounted(() => {
                 </span>
               </td>
               <td class="py-3 px-4 text-sm text-text-secondary">
-                {{ new Date(group.created_at).toLocaleDateString() }}
+                {{ formatDateTime(group.created_at) }}
               </td>
               <td class="py-3 px-4">
                 <div class="flex items-center justify-end gap-2">
@@ -876,7 +877,7 @@ onUnmounted(() => {
                   <span v-else class="text-text-placeholder">-</span>
                 </td>
                 <td class="py-3 px-4 text-sm text-text-secondary">
-                  {{ new Date(req.created_at).toLocaleDateString() }}
+                  {{ formatDateTime(req.created_at) }}
                 </td>
                 <td class="py-3 px-4">
                   <div class="flex items-center justify-end gap-2">

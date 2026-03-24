@@ -6,7 +6,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.utils.milvus_server import start_milvus_lite, stop_milvus_lite
 from pymilvus import connections, utility
 from app.config import settings
 
@@ -17,19 +16,18 @@ def test_milvus_connection():
     print("Milvus 向量数据库连接测试")
     print("=" * 60)
 
-    print(f"\n🔄 启动 Milvus Lite 服务器...")
-    if not start_milvus_lite(settings.milvus_port):
-        print("❌ 启动失败！")
-        return False
-
-    print(f"✅ Milvus Lite 已启动: localhost:{settings.milvus_port}")
+    print(f"\n配置信息:")
+    print(f"  - Host: {settings.milvus_host}")
+    print(f"  - Port: {settings.milvus_port}")
+    print(f"  - Collection: {settings.milvus_collection}")
 
     try:
         print(f"\n🔄 连接 Milvus 服务器...")
         connections.connect(
             alias="default",
-            host="localhost",
-            port=settings.milvus_port
+            host=settings.milvus_host,
+            port=settings.milvus_port,
+            timeout=10
         )
         print("✅ 连接成功!")
 
@@ -41,6 +39,8 @@ def test_milvus_connection():
             print("集合列表:")
             for coll in collections[:10]:
                 print(f"  - {coll}")
+        else:
+            print("  (暂无集合)")
 
         connections.disconnect("default")
         print("\n🔌 已断开连接")
@@ -52,9 +52,6 @@ def test_milvus_connection():
         import traceback
         traceback.print_exc()
         return False
-
-    finally:
-        stop_milvus_lite()
 
 
 if __name__ == "__main__":

@@ -1524,17 +1524,18 @@ const formatTime = (timestamp: string): string => {
   }
 }
 
-// 格式化时间戳为完整格式（含日期）
+// 格式化时间戳为完整格式（YYYY-MM-DD HH:MM:SS）
 const formatDateTime = (timestamp: string): string => {
   if (!timestamp) return ''
   try {
     const date = new Date(timestamp)
+    const year = date.getFullYear()
     const month = (date.getMonth() + 1).toString().padStart(2, '0')
     const day = date.getDate().toString().padStart(2, '0')
     const hours = date.getHours().toString().padStart(2, '0')
     const minutes = date.getMinutes().toString().padStart(2, '0')
     const seconds = date.getSeconds().toString().padStart(2, '0')
-    return `${month}-${day} ${hours}:${minutes}:${seconds}`
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
   } catch {
     return timestamp
   }
@@ -1968,7 +1969,19 @@ const formatDateTime = (timestamp: string): string => {
               <p class="text-green-600 text-xs">AI用例生成全流程已完成</p>
             </div>
           </div>
-          
+
+          <!-- 项目 + 需求名称信息 -->
+          <div class="bg-white/50 rounded-lg px-3 py-2 mb-4 flex items-center gap-4 text-xs">
+            <div v-if="getProjectName(selectedProjectId)">
+              <span class="text-gray-400">项目：</span>
+              <span class="text-gray-700 font-medium">{{ getProjectName(selectedProjectId) }}</span>
+            </div>
+            <div v-if="requirementName">
+              <span class="text-gray-400">需求：</span>
+              <span class="text-gray-700 font-medium">{{ requirementName }}</span>
+            </div>
+          </div>
+
           <!-- 核心统计 - 与任务记录同源 -->
           <div class="grid grid-cols-4 gap-2 mb-4">
             <div class="bg-white/70 rounded-lg p-2.5 text-center">
@@ -1981,7 +1994,7 @@ const formatDateTime = (timestamp: string): string => {
             </div>
             <div class="bg-white/70 rounded-lg p-2.5 text-center">
               <div class="text-xl font-bold text-purple-600">{{ statsInfo.chunkCount || 0 }}</div>
-              <div class="text-[10px] text-gray-500">文档分块</div>
+              <div class="text-[10px] text-gray-500">文档切片</div>
             </div>
             <div class="bg-white/70 rounded-lg p-2.5 text-center">
               <div class="text-xl font-bold text-orange-600">{{ formatDuration(statsInfo.stageTimings?.total) || statsInfo.totalTime || '-' }}</div>

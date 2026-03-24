@@ -8,15 +8,17 @@ from typing import Optional
 from pathlib import Path
 import time
 import shutil
+import threading
 
 
 class MilvusLiteServer:
     """Milvus Lite服务器管理器"""
-    
+
     def __init__(self):
         self._server = None
         self._is_running = False
-    
+        self._start_thread: Optional[threading.Thread] = None
+
     def _cleanup_old_logs(self, max_age_days: int = 7):
         """清理过期日志文件"""
         try:
@@ -45,44 +47,47 @@ class MilvusLiteServer:
         except Exception as e:
             logger.warning(f"⚠️ 清理日志失败: {e}")
     
-    def start(self, port: int = 19530, cleanup_logs: bool = True) -> bool:
-        """
-        启动Milvus Lite服务器
-        
-        Args:
-            port: 服务端口，默认19530
-            
-        Returns:
-            是否启动成功
-        """
+    def _start_in_thread(self, port: int):
+        """在后台线程中启动 Milvus Lite（避免阻塞主事件循环）"""
         try:
-            # 清理过期日志
-            if cleanup_logs:
-                self._cleanup_old_logs()
-            
             from milvus import default_server
-            
-            # 设置端口
             default_server.listen_port = port
-            
-            # 设置缓存大小为1GB
             default_server.config.set("cache_size", "1GB")
-            
-            # 启动服务器
             default_server.start()
-            
             self._server = default_server
             self._is_running = True
-            
             logger.info(f"✅ Milvus Lite服务器已启动: localhost:{port}")
-            return True
-            
         except ImportError:
-            logger.warning("⚠️  Milvus Lite未安装，请运行: pip install milvus")
-            return False
+            logger.warning("⚠️ Milvus Lite未安装，请运行: pip install milvus")
         except Exception as e:
             logger.error(f"❌ 启动Milvus Lite失败: {e}")
-            return False
+
+    def start(self, port: int = 19530, cleanup_logs: bool = True) -> bool:
+        """
+        启动Milvus Lite服务器（后台线程执行，不阻塞）
+
+        Args:
+            port: 服务端口，默认19530
+
+        Returns:
+            是否成功启动后台线程（不代表Milvus就绪）
+        """
+        if self._is_running:
+            logger.info(f"Milvus Lite已在运行: localhost:{port}")
+            return True
+
+        if cleanup_logs:
+            self._cleanup_old_logs()
+
+        self._start_thread = threading.Thread(
+            target=self._start_in_thread,
+            args=(port,),
+            daemon=True,
+            name="milvus-lite-starter"
+        )
+        self._start_thread.start()
+        logger.info(f"🚀 Milvus Lite启动线程已启动: localhost:{port}")
+        return True
     
     def stop(self) -> bool:
         """

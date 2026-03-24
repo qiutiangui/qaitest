@@ -7,6 +7,7 @@ import useRequirementStore from '@/stores/requirement'
 import useProjectStore from '@/stores/project'
 import useVersionStore from '@/stores/version'
 import type { Requirement, RequirementCreate, RequirementUpdate } from '@/types/requirement'
+import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const route = useRoute()
@@ -557,7 +558,7 @@ onMounted(async () => {
                 <span v-else class="text-text-placeholder">-</span>
               </td>
               <td class="py-3 px-4 text-sm text-text-secondary">
-                {{ new Date(req.created_at).toLocaleDateString() }}
+                {{ formatDateTime(req.created_at) }}
               </td>
               <td class="py-3 px-4">
                 <div class="flex items-center justify-end gap-2">

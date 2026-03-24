@@ -6,6 +6,7 @@ import useTestcaseStore from '@/stores/testcase'
 import useProjectStore from '@/stores/project'
 import useRequirementStore from '@/stores/requirement'
 import { testcaseApi } from '@/api/testcase'
+import { formatDateTime } from '@/utils/date'
 import DetailCard from '@/components/detail/DetailCard.vue'
 import EditableField from '@/components/detail/EditableField.vue'
 import StatusBadge from '@/components/detail/StatusBadge.vue'
@@ -18,7 +19,6 @@ const requirementStore = useRequirementStore()
 // 筛选条件
 const selectedProject = ref<number | undefined>()
 const selectedPriority = ref<string | undefined>()
-const selectedStatus = ref<string | undefined>()
 const searchKeyword = ref('')
 
 // 分页
@@ -78,9 +78,6 @@ const exporting = ref(false)
 // 优先级选项
 const priorities = ['高', '中', '低']
 
-// 状态选项
-const statuses = ['未开始', '进行中', '已完成', '已阻塞']
-
 // 计算总页数
 const totalPages = computed(() => Math.ceil(testcaseStore.total / pageSize.value))
 
@@ -94,7 +91,6 @@ async function fetchList() {
     page_size: pageSize.value,
     project_id: selectedProject.value,
     priority: selectedPriority.value,
-    status: selectedStatus.value,
     keyword: searchKeyword.value || undefined,
   })
 }
@@ -109,7 +105,6 @@ function handleSearch() {
 function handleReset() {
   selectedProject.value = undefined
   selectedPriority.value = undefined
-  selectedStatus.value = undefined
   searchKeyword.value = ''
   currentPage.value = 1
   fetchList()
@@ -452,19 +447,6 @@ onMounted(async () => {
           </select>
         </div>
 
-        <!-- 状态筛选 -->
-        <div class="flex items-center gap-2">
-          <label class="text-sm text-text-secondary">状态：</label>
-          <select
-            v-model="selectedStatus"
-            class="input-field w-32"
-            @change="handleFilterChange"
-          >
-            <option :value="undefined">全部</option>
-            <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-          </select>
-        </div>
-
         <!-- 搜索框 -->
         <div class="flex items-center gap-2 flex-1 min-w-[200px]">
           <input
@@ -506,7 +488,6 @@ onMounted(async () => {
               <th class="text-left py-3 px-4 text-sm font-medium text-text-secondary">关联功能点</th>
               <th class="text-left py-3 px-4 text-sm font-medium text-text-secondary">所属项目</th>
               <th class="text-left py-3 px-4 text-sm font-medium text-text-secondary">优先级</th>
-              <th class="text-left py-3 px-4 text-sm font-medium text-text-secondary">状态</th>
               <th class="text-left py-3 px-4 text-sm font-medium text-text-secondary">创建时间</th>
               <th class="text-right py-3 px-4 text-sm font-medium text-text-secondary">操作</th>
             </tr>
@@ -556,23 +537,8 @@ onMounted(async () => {
                 </span>
                 <span v-else class="text-text-placeholder">-</span>
               </td>
-              <td class="py-3 px-4">
-                <span
-                  v-if="tc.status"
-                  :class="[
-                    'px-2 py-0.5 rounded text-xs',
-                    tc.status === '已完成' ? 'bg-green-100 text-green-700' :
-                    tc.status === '进行中' ? 'bg-blue-100 text-blue-700' :
-                    tc.status === '已阻塞' ? 'bg-red-100 text-red-700' :
-                    'bg-gray-100 text-gray-700'
-                  ]"
-                >
-                  {{ tc.status }}
-                </span>
-                <span v-else class="text-text-placeholder">-</span>
-              </td>
               <td class="py-3 px-4 text-sm text-text-secondary">
-                {{ new Date(tc.created_at).toLocaleDateString() }}
+                {{ formatDateTime(tc.created_at) }}
               </td>
               <td class="py-3 px-4">
                 <div class="flex items-center justify-end gap-2">

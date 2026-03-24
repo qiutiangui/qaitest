@@ -63,6 +63,7 @@ interface TaskDetail {
   total_testcases?: number
   saved_count: number
   saved_ids?: number[]
+  doc_chunk_count?: number
   result?: any
   error_message?: string
   error_details?: any
@@ -648,7 +649,7 @@ watch(() => taskDetail.value?.status, (newStatus) => {
       <!-- 概览Tab -->
       <div v-if="activeTab === 'overview'" class="space-y-6">
         <!-- 统计卡片 -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div class="bg-white rounded-xl border border-gray-200 p-4">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -681,6 +682,18 @@ watch(() => taskDetail.value?.status, (newStatus) => {
               <div>
                 <p class="text-sm text-gray-500">执行耗时</p>
                 <p class="text-xl font-bold text-gray-900">{{ formatDuration(taskDetail.stats?.duration_seconds) }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="taskDetail.doc_chunk_count > 0" class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
+                <LayoutGrid class="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <p class="text-sm text-gray-500">文档切片</p>
+                <p class="text-xl font-bold text-gray-900">{{ taskDetail.doc_chunk_count }}</p>
               </div>
             </div>
           </div>
@@ -722,7 +735,7 @@ watch(() => taskDetail.value?.status, (newStatus) => {
             <div class="space-y-4">
               <div class="flex justify-between">
                 <span class="text-sm text-gray-500">项目</span>
-                <span class="text-sm font-medium text-gray-900">{{ taskDetail.project_id ? `项目${taskDetail.project_id}` : '未关联' }}</span>
+                <span class="text-sm font-medium text-gray-900">{{ taskDetail.project_name || '-' }}</span>
               </div>
               <div v-if="taskDetail.requirement_name" class="flex justify-between">
                 <span class="text-sm text-gray-500">需求名称</span>

@@ -4,6 +4,7 @@ import { Plus, Trash2, Eye } from 'lucide-vue-next'
 import useTestplanStore from '@/stores/testplan'
 import useProjectStore from '@/stores/project'
 import { useRouter } from 'vue-router'
+import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const testplanStore = useTestplanStore()
@@ -190,7 +191,7 @@ onMounted(async () => {
             {{ plan.status }}
           </span>
           <span class="text-xs text-text-placeholder">
-            {{ new Date(plan.created_at).toLocaleDateString() }}
+            {{ formatDateTime(plan.created_at) }}
           </span>
         </div>
       </div>

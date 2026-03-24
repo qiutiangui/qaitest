@@ -391,6 +391,7 @@ def _merge_similar_testcases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]
 async def push_log(task_id: str, agent_name: str, content: str, message_type: str = "thinking", extra_data: dict = None):
     """推送日志消息到WebSocket并持久化到数据库"""
     try:
+        logger.info(f"[push_log] 开始推送: task_id={task_id}, agent={agent_name}, type={message_type}")
         await push_to_websocket(task_id, agent_name, content, message_type, extra_data)
         
         # 跳过持久化，避免可能的数据库写入阻塞
@@ -1426,12 +1427,12 @@ async def run_testcase_generation(
     llm_config: Optional[Any] = None,
 ) -> List[int]:
     """
-    运行用例生成流水线（并行RAG检索 + 并行生成 + 合并评审 + 结构化输出）
-    
+    运行用例生成流水线（RAG预检索 + 串行流式生成 + 合并评审 + 结构化输出）
+
     流程：
     1. 输出功能点列表（从数据库查询）
-    2. 并行RAG检索 + 测试用例生成
-    3. 输出第一版测试用例（从内存打印）
+    2. RAG预检索（批量并行） + 缓存
+    3. 串行流式生成测试用例（逐功能点）
     4. 合并评审（输出结构化JSON结论）
     5. 定稿入库
     6. 输出最终测试用例（从数据库查询）
@@ -1440,7 +1441,7 @@ async def run_testcase_generation(
     from app.agents.runtime import get_model_clients
     from datetime import datetime
 
-    logger.info(f"开始用例生成(并行RAG+并行生成模式): task_id={task_id}")
+    logger.info(f"开始用例生成(Runtime串行模式): task_id={task_id}")
 
     start_time = datetime.now()
 
@@ -1725,11 +1726,14 @@ async def run_testcase_generation(
         # ========== 阶段3：AI评审 ==========
         # 静默执行，不打印阶段转换日志
         # await push_log(task_id, "System", f"✅ 并行生成完成，共 {len(all_generated_cases)} 个测试用例", "response")
+        logger.info(f"[AI评审] 开始评审阶段，用例数量: {len(all_generated_cases)}")
         await update_step('TestCaseReviewAgent', "正在评审测试用例...")
 
         # 创建流式缓冲器（新增流式输出）
         review_stream_buffer = StreamBuffer(task_id, "用例评审", buffer_size=200)
+        logger.info(f"[AI评审] 创建流式缓冲器完成")
         await review_stream_buffer.start("⏳ AI正在评审测试用例...\n\n")
+        logger.info(f"[AI评审] 流式开始消息已发送")
 
         review_agent = AssistantAgent(
             name='review_agent',
@@ -1744,14 +1748,31 @@ async def run_testcase_generation(
         # 流式输出
         stream = review_agent.run_stream(task=review_task)
         review_content = ""
+        chunk_count = 0
+        msg_types_seen = []  # 记录见过的消息类型
 
         async for msg in stream:
+            msg_type = type(msg).__name__
+            if msg_type not in msg_types_seen:
+                msg_types_seen.append(msg_type)
+                logger.info(f"[AI评审] 收到新类型消息: {msg_type}")
+            
             if isinstance(msg, ModelClientStreamingChunkEvent):
+                chunk_count += 1
+                if chunk_count == 1:  # 只在第一个chunk打印日志
+                    logger.info(f"[AI评审] 收到第一个chunk")
                 await review_stream_buffer.append(msg.content)
             elif isinstance(msg, TaskResult):
+                logger.info(f"[AI评审] TaskResult完成，收到 {chunk_count} 个chunks")
                 await review_stream_buffer.flush()
                 review_content = msg.messages[-1].content
                 await review_stream_buffer.end("\n\n✅ 评审完成")
+                logger.info(f"[AI评审] 流式结束消息已发送")
+            else:
+                # 打印其他消息类型的内容摘要
+                if hasattr(msg, 'content'):
+                    content_preview = str(msg.content)[:100] if msg.content else "None"
+                    logger.info(f"[AI评审] 其他消息类型: {msg_type}, content: {content_preview}...")
 
         # 解析评审结果
         review_conclusion = {
@@ -1792,15 +1813,25 @@ async def run_testcase_generation(
         # 输出评审完成消息（简化版）
         coverage_rate = review_conclusion.get('coverage_rate', '100%')
         if isinstance(coverage_rate, str):
-            # 处理中文数字和特殊字符，如 "约85%"、"85%" 等
+            # 处理中文数字和特殊字符，如 "约85%"、"85%"、"80%" 等
             numeric_part = re.search(r'[\d.]+', coverage_rate)
             if numeric_part:
-                coverage_rate = float(numeric_part.group()) / 100
+                value = float(numeric_part.group())
+                # 如果包含百分号%，则转换为小数；否则直接使用数值
+                if '%' in coverage_rate:
+                    coverage_rate = value / 100
+                else:
+                    coverage_rate = value  # 直接作为百分比数值
             else:
-                coverage_rate = 1.0  # 默认100%
-        coverage_percent = coverage_rate * 100 if isinstance(coverage_rate, float) else 100
+                coverage_rate = 100.0  # 默认100%
+        
+        # 转换为百分比并限制在合理范围 (0-100%)
+        if isinstance(coverage_rate, float):
+            coverage_percent = min(max(coverage_rate, 0), 100)
+        else:
+            coverage_percent = 100
 
-        await push_log(task_id, "用例评审", f"✅ AI评审完成 (通过率: {coverage_percent:.1f}%, 覆盖率: {coverage_percent:.1f}%)", "response")
+        await push_log(task_id, "用例评审", f"✅ AI评审完成 (覆盖率: {coverage_percent:.1f}%)", "response")
 
         # ========== 发送第一版测试用例到前端（美观的卡片展示）==========
         # await push_log(task_id, "第一版用例", f"[FIRST_TC]{json.dumps(all_generated_cases, ensure_ascii=False)}[/FIRST_TC]", "stream")

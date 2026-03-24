@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import useProjectStore from '@/stores/project'
 import type { Project } from '@/types/project'
 import ragApi from '@/api/rag'
+import { formatDateTime } from '@/utils/date'
 
 interface ProjectStats {
   version_count: number
@@ -87,13 +88,13 @@ const getIndexStatus = (projectId: number) => {
 const handleDeleteIndex = async (project: Project) => {
   try {
     await ElMessageBox.confirm(
-      `确定删除项目「${project.name}」的向量数据吗？\n删除后需重新上传需求文档才能使用 RAG 增强功能。`,
-      '删除向量数据',
+      `确定删除项目「${project.name}」的文档切片吗？\n删除后需重新上传需求文档才能使用 RAG 增强功能。`,
+      '删除文档切片',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )
     await ragApi.deleteRAGIndex(project.id)
     ragStats.value[project.id] = { exists: false, count: 0 }
-    ElMessage.success('向量数据已删除')
+    ElMessage.success('文档切片已删除')
   } catch (e) {
     // 取消删除
   }
@@ -296,10 +297,10 @@ const handleCardClick = (project: Project) => {
           <div class="flex items-center gap-2">
             <Database class="w-3.5 h-3.5 text-text-secondary" />
             <span v-if="getIndexStatus(project.id)?.exists" class="text-xs text-green-600">
-              向量数据 ({{ getIndexStatus(project.id)?.count || 0 }} 条)
+              文档切片 ({{ getIndexStatus(project.id)?.count || 0 }})
             </span>
             <span v-else class="text-xs text-text-placeholder">
-              暂无向量数据
+              暂无文档切片
             </span>
           </div>
           <button
@@ -307,7 +308,7 @@ const handleCardClick = (project: Project) => {
             @click.stop="handleDeleteIndex(project)"
             class="text-xs text-red-500 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
           >
-            删除向量
+            删除切片
           </button>
         </div>
 
@@ -323,7 +324,7 @@ const handleCardClick = (project: Project) => {
               {{ project.status }}
             </span>
             <span class="text-xs text-text-placeholder">
-              {{ new Date(project.created_at).toLocaleDateString() }}
+              {{ formatDateTime(project.created_at) }}
             </span>
           </div>
           

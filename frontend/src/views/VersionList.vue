@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import useVersionStore from '@/stores/version'
 import useProjectStore from '@/stores/project'
 import type { ProjectVersion } from '@/types/version'
+import { formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const versionStore = useVersionStore()
@@ -268,7 +269,7 @@ const getProjectName = (projectId: number) => {
         </p>
         <div class="flex items-center justify-between text-xs text-text-placeholder">
           <span>{{ version.created_by || '系统' }}</span>
-          <span>{{ version.released_at ? `发布于 ${new Date(version.released_at).toLocaleDateString()}` : new Date(version.created_at).toLocaleDateString() }}</span>
+          <span>{{ version.released_at ? `发布于 ${formatDateTime(version.released_at)}` : formatDateTime(version.created_at) }}</span>
         </div>
       </div>
     </div>

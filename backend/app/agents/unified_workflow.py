@@ -394,6 +394,10 @@ async def run_requirement_analysis(task_id: str, project_id: Optional[int], vers
     task.saved_requirement_ids = saved_ids
     task.total_requirements = len(requirements)
     task.saved_requirements = len(saved_ids)
+    # 持久化文档分块数量
+    if not task.result:
+        task.result = {}
+    task.result["doc_chunk_count"] = chunk_count
     await task.save()
     
     await push_log(task_id, "功能点保存", f"✅ 已保存 {len(saved_ids)} 个功能点到数据库", "complete", 
@@ -654,10 +658,20 @@ async def run_testcase_generation(task_id: str, project_id: Optional[int], versi
         # 处理中文数字和特殊字符，如 "约85%"、"85%" 等
         numeric_part = re.search(r'[\d.]+', coverage_rate)
         if numeric_part:
-            coverage_rate = float(numeric_part.group()) / 100
+            value = float(numeric_part.group())
+            # 如果包含百分号%，则转换为小数；否则直接使用数值
+            if '%' in coverage_rate:
+                coverage_rate = value / 100
+            else:
+                coverage_rate = value  # 直接作为百分比数值
         else:
-            coverage_rate = 1.0  # 默认100%
-    coverage_percent = coverage_rate * 100 if isinstance(coverage_rate, float) else 100
+            coverage_rate = 100.0  # 默认100%
+    
+    # 转换为百分比并限制在合理范围 (0-100%)
+    if isinstance(coverage_rate, float):
+        coverage_percent = min(max(coverage_rate, 0), 100)
+    else:
+        coverage_percent = 100
     
     await push_log(task_id, "用例评审", f"✅ AI评审完成 (覆盖率: {coverage_percent:.1f}%)", "response")
 
