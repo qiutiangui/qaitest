@@ -32,11 +32,12 @@ async def get_model_status():
     emb_config = await EmbeddingModelService.get_default_config()
     
     # 构建状态
+    # 注意：model_name 使用 default_model（实际 API 调用的模型名），如 ollama 模型需要 qwen2.5:7b-instruct
     status = {
         "requirement_analyze": {
             "configured": req_model is not None,
             "model": req_model.display_name if req_model else None,
-            "model_name": req_model.name if req_model else None,
+            "model_name": req_model.default_model if req_model else None,
             "provider": req_model.provider if req_model else None,
             "id": req_model.id if req_model else None,
             "is_custom": req_model.provider == "custom" if req_model else False,
@@ -44,7 +45,7 @@ async def get_model_status():
         "testcase_generate": {
             "configured": gen_model is not None,
             "model": gen_model.display_name if gen_model else None,
-            "model_name": gen_model.name if gen_model else None,
+            "model_name": gen_model.default_model if gen_model else None,
             "provider": gen_model.provider if gen_model else None,
             "id": gen_model.id if gen_model else None,
             "is_custom": gen_model.provider == "custom" if gen_model else False,
@@ -52,7 +53,7 @@ async def get_model_status():
         "testcase_review": {
             "configured": rev_model is not None,
             "model": rev_model.display_name if rev_model else None,
-            "model_name": rev_model.name if rev_model else None,
+            "model_name": rev_model.default_model if rev_model else None,
             "provider": rev_model.provider if rev_model else None,
             "id": rev_model.id if rev_model else None,
             "is_custom": rev_model.provider == "custom" if rev_model else False,

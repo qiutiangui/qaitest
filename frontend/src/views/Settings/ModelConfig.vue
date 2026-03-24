@@ -120,7 +120,7 @@ const loadData = async () => {
 const getDefaultForPurpose = (purpose: string) => {
   const defaultModel = llmDefaults.value.find(d => d.purpose === purpose)
   if (!defaultModel) return null
-  return llmModels.value.find(m => m.name === defaultModel.model_name)
+  return llmModels.value.find(m => m.default_model === defaultModel.model_name)
 }
 
 // 获取嵌入模型默认配置
@@ -144,7 +144,8 @@ const setDefaultEmbedding = async (modelName: string) => {
 // 判断模型是否为某用途的默认
 const isDefaultForPurpose = (modelName: string, purpose: string) => {
   const defaultModel = llmDefaults.value.find(d => d.purpose === purpose)
-  return defaultModel?.model_name === modelName
+  const model = llmModels.value.find(m => m.default_model === modelName)
+  return model && defaultModel?.model_name === model.default_model
 }
 
 // 判断嵌入模型是否为默认
@@ -489,7 +490,7 @@ onMounted(() => {
                 <div v-for="purpose in purposeOptions" :key="purpose.value" class="purpose-item">
                   <span class="purpose-label">{{ purpose.label }}</span>
                   <ElSelect
-                    :model-value="getDefaultForPurpose(purpose.value)?.name || ''"
+                    :model-value="getDefaultForPurpose(purpose.value)?.default_model || ''"
                     placeholder="选择模型"
                     size="default"
                     clearable
@@ -498,9 +499,9 @@ onMounted(() => {
                   >
                     <ElOption
                       v-for="model in enabledLLMModels"
-                      :key="model.name"
+                      :key="model.default_model"
                       :label="model.display_name"
-                      :value="model.name"
+                      :value="model.default_model"
                     />
                   </ElSelect>
                 </div>
@@ -520,9 +521,9 @@ onMounted(() => {
                   <template #default="{ row }">
                     <div class="flex items-center gap-2">
                       <span class="model-name-text">{{ row.display_name }}</span>
-                      <ElTag v-if="isDefaultForPurpose(row.name, 'testcase_generate')" size="small" type="warning" effect="light" class="compact-tag">用例生成</ElTag>
-                      <ElTag v-if="isDefaultForPurpose(row.name, 'requirement_analyze')" size="small" type="success" effect="light" class="compact-tag">需求分析</ElTag>
-                      <ElTag v-if="isDefaultForPurpose(row.name, 'testcase_review')" size="small" type="info" effect="light" class="compact-tag">用例评审</ElTag>
+                      <ElTag v-if="isDefaultForPurpose(row.default_model, 'testcase_generate')" size="small" type="warning" effect="light" class="compact-tag">用例生成</ElTag>
+                      <ElTag v-if="isDefaultForPurpose(row.default_model, 'requirement_analyze')" size="small" type="success" effect="light" class="compact-tag">需求分析</ElTag>
+                      <ElTag v-if="isDefaultForPurpose(row.default_model, 'testcase_review')" size="small" type="info" effect="light" class="compact-tag">用例评审</ElTag>
                     </div>
                   </template>
                 </ElTableColumn>

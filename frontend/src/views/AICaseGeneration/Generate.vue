@@ -604,12 +604,12 @@ const startGeneration = async () => {
         modelConfig.requirement_analyze_model = {
           provider: 'custom',
           custom_id: parseInt(parts[1]),
-          model: parts.slice(2).join(':')
+          model: parts.slice(2).join(':')  // 模型名可能包含 :
         }
       } else {
         modelConfig.requirement_analyze_model = {
           provider: parts[0],
-          model: parts[1]
+          model: parts.slice(1).join(':')  // 模型名可能包含 :，如 qwen2.5:7b-instruct
         }
       }
     }
@@ -956,11 +956,11 @@ const generateTestCases = async (requirementIds: number[]) => {
       llmConfig.requirement_analyze_model = {
         provider: 'custom',
         custom_id: parseInt(parts[1]),
-        model: parts.slice(2).join(':')
+        model: parts.slice(2).join(':')  // 模型名可能包含 :
       }
       console.log('使用自定义需求分析模型配置:', llmConfig.requirement_analyze_model)
     } else {
-      llmConfig.requirement_analyze_model = { provider: parts[0], model: parts[1] }
+      llmConfig.requirement_analyze_model = { provider: parts[0], model: parts.slice(1).join(':') }
       console.log('使用内置需求分析模型配置:', llmConfig.requirement_analyze_model)
     }
   }
@@ -973,12 +973,12 @@ const generateTestCases = async (requirementIds: number[]) => {
       llmConfig.testcase_generate_model = {
         provider: 'custom',  // 后端会自动转换为枚举
         custom_id: parseInt(parts[1]),
-        model: parts.slice(2).join(':')
+        model: parts.slice(2).join(':')  // 模型名可能包含 :
       }
       console.log('使用自定义模型配置:', llmConfig.testcase_generate_model)
     } else {
       // 普通模型格式: provider:model_name
-      llmConfig.testcase_generate_model = { provider: parts[0], model: parts[1] }
+      llmConfig.testcase_generate_model = { provider: parts[0], model: parts.slice(1).join(':') }
       console.log('使用内置模型配置:', llmConfig.testcase_generate_model)
     }
   } else {
@@ -992,10 +992,10 @@ const generateTestCases = async (requirementIds: number[]) => {
       llmConfig.testcase_review_model = {
         provider: 'custom',
         custom_id: parseInt(parts[1]),
-        model: parts.slice(2).join(':')
+        model: parts.slice(2).join(':')  // 模型名可能包含 :
       }
     } else {
-      llmConfig.testcase_review_model = { provider: parts[0], model: parts[1] }
+      llmConfig.testcase_review_model = { provider: parts[0], model: parts.slice(1).join(':') }
     }
   }
 

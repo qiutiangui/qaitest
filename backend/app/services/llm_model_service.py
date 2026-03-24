@@ -104,6 +104,12 @@ class LLMModelService:
         if not model:
             return False
 
+        # 删除关联的默认模型配置
+        await DefaultModelConfig.filter(
+            model_name=model.name,
+            model_type="llm"
+        ).delete()
+
         await model.delete()
         logger.info(f"删除LLM模型配置: {model.name}")
         return True

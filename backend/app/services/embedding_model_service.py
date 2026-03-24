@@ -153,9 +153,11 @@ class EmbeddingModelService:
         if not config:
             return False
 
-        # 如果删除的是默认模型，需要从 DefaultModelConfig 删除记录
-        if config.is_default:
-            await DefaultModelConfig.filter(purpose="embedding").delete()
+        # 删除关联的默认模型配置
+        await DefaultModelConfig.filter(
+            model_name=config.name,
+            model_type="embedding"
+        ).delete()
 
         await config.delete()
         logger.info(f"删除嵌入模型配置: {config.name}")

@@ -11,6 +11,7 @@ import asyncio
 
 from app.config import settings
 from app.database import init_db, close_db, check_db_connection
+from app.utils.milvus_server import start_milvus_lite, stop_milvus_lite
 from app.api import projects, versions, requirements, testcases, testplans, testreports, websocket, model_config, custom_model, rag, ai_test_tasks, agent_prompts, llm_models, embedding_models, model_status
 
 
@@ -33,6 +34,14 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
     logger.info(f"qaitest智测平台启动中... 环境: {settings.app_env}")
+    
+    # 启动 Milvus Lite（用于 RAG 向量检索）
+    milvus_started = start_milvus_lite(settings.milvus_port)
+    if milvus_started:
+        logger.info(f"✅ Milvus Lite 已启动: localhost:{settings.milvus_port}")
+    else:
+        logger.warning(f"⚠️ Milvus Lite 启动失败，RAG功能将不可用")
+    
     await init_db()
     
     # 初始化默认提示词模板
@@ -48,6 +57,7 @@ async def lifespan(app: FastAPI):
 
     # 关闭时清理
     logger.info("qaitest智测平台关闭中...")
+    stop_milvus_lite()
     await close_db()
     logger.info("qaitest智测平台已关闭")
 
