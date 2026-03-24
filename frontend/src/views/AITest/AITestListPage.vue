@@ -530,54 +530,6 @@ watch([filterStatus], () => {
               </span>
             </div>
             
-            <!-- 双阶段进度显示 -->
-            <div class="flex items-center gap-6 mb-2">
-              <!-- 阶段1: 需求分析 -->
-              <div class="flex items-center gap-2">
-                <div :class="[
-                  'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                  task.requirement_phase_status === 'completed' ? 'bg-green-500 text-white' :
-                  task.requirement_phase_status === 'running' ? 'bg-blue-500 text-white animate-pulse' :
-                  task.requirement_phase_status === 'failed' ? 'bg-red-500 text-white' :
-                  'bg-gray-200 text-gray-500'
-                ]">
-                  <CheckCircle v-if="task.requirement_phase_status === 'completed'" class="w-3.5 h-3.5" />
-                  <Loader2 v-else-if="task.requirement_phase_status === 'running'" class="w-3.5 h-3.5 animate-spin" />
-                  <XCircle v-else-if="task.requirement_phase_status === 'failed'" class="w-3.5 h-3.5" />
-                  <span v-else>1</span>
-                </div>
-                <span class="text-sm text-gray-600">需求分析</span>
-                <span class="text-xs text-gray-400">{{ getPhaseProgressText(task, 'requirement') }}</span>
-                <span v-if="task.requirement_phase_status === 'completed'" class="text-xs text-green-500">
-                  ✓ {{ task.saved_requirements }}个功能点
-                </span>
-              </div>
-              
-              <!-- 箭头 -->
-              <ArrowRight class="w-4 h-4 text-gray-300" />
-              
-              <!-- 阶段2: 用例生成 -->
-              <div class="flex items-center gap-2">
-                <div :class="[
-                  'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                  task.testcase_phase_status === 'completed' ? 'bg-green-500 text-white' :
-                  task.testcase_phase_status === 'running' ? 'bg-blue-500 text-white animate-pulse' :
-                  task.testcase_phase_status === 'failed' ? 'bg-red-500 text-white' :
-                  'bg-gray-200 text-gray-500'
-                ]">
-                  <CheckCircle v-if="task.testcase_phase_status === 'completed'" class="w-3.5 h-3.5" />
-                  <Loader2 v-else-if="task.testcase_phase_status === 'running'" class="w-3.5 h-3.5 animate-spin" />
-                  <XCircle v-else-if="task.testcase_phase_status === 'failed'" class="w-3.5 h-3.5" />
-                  <span v-else>2</span>
-                </div>
-                <span class="text-sm text-gray-600">用例生成</span>
-                <span class="text-xs text-gray-400">{{ getPhaseProgressText(task, 'testcase') }}</span>
-                <span v-if="task.testcase_phase_status === 'completed'" class="text-xs text-green-500">
-                  ✓ {{ task.saved_testcases }}个用例
-                </span>
-              </div>
-            </div>
-            
             <!-- 底部信息 -->
             <div class="flex items-center gap-4 text-sm text-gray-400">
               <span>{{ formatDateTime(task.created_at) }}</span>

@@ -74,7 +74,8 @@ async def push_agent_message(
     agent_name: str, 
     content: str, 
     message_type: str = "thinking",
-    extra_data: dict = None
+    extra_data: dict = None,
+    progress: int = None
 ):
     """
     推送Agent消息到前端
@@ -85,6 +86,7 @@ async def push_agent_message(
         content: 消息内容
         message_type: 消息类型 (thinking/response/error/complete)
         extra_data: 额外数据
+        progress: 进度值（用例生成阶段进度 0-100），会自动转换为整体进度
     """
     from datetime import datetime
     
@@ -98,6 +100,8 @@ async def push_agent_message(
         "TestcaseGenerateAgent": "用例生成",
         "TestcaseReviewAgent": "用例评审",
         "TestcaseFormatAgent": "格式优化",
+        "TestcaseFinalizeAgent": "整体定稿",
+        "TestcaseInDatabaseAgent": "数据保存",
         "RAGIndexAgent": "文档索引",
         "ReviewAgent": "AI评审",
         # 流程步骤代码（用于前端进度条）
@@ -128,12 +132,24 @@ async def push_agent_message(
     if extra_data:
         message["data"] = extra_data
     
+    # 添加进度字段（用于前端任务记录页面的进度条同步）
+    # 将用例生成阶段进度转换为整体进度: 整体 = 40 + (阶段进度 * 0.6)
+    if progress is not None:
+        message["progress"] = 40 + int(progress * 0.6)
+    else:
+        # 从content中解析进度标签
+        import re
+        progress_match = re.search(r'\[PROGRESS\](\d+)\[/PROGRESS\]', content)
+        if progress_match:
+            phase_progress = int(progress_match.group(1))
+            message["progress"] = 40 + int(phase_progress * 0.6)
+    
     await manager.send_message(task_id, message)
 
 
 # 兼容性别名
-async def push_to_websocket(task_id: str, agent_name: str, content: str, message_type: str = "thinking", extra_data: dict = None):
+async def push_to_websocket(task_id: str, agent_name: str, content: str, message_type: str = "thinking", extra_data: dict = None, progress: int = None):
     """
     推送消息到WebSocket（兼容性别名）
     """
-    await push_agent_message(task_id, agent_name, content, message_type, extra_data)
+    await push_agent_message(task_id, agent_name, content, message_type, extra_data, progress)

@@ -633,150 +633,39 @@ watch(() => taskDetail.value?.status, (newStatus) => {
     <div v-else-if="taskDetail" class="flex-1 overflow-auto p-6">
       <!-- 概览Tab -->
       <div v-if="activeTab === 'overview'" class="space-y-6">
-        <!-- 双阶段进度卡片 -->
+        <!-- 整体进度卡片 -->
         <div class="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 class="text-sm font-medium text-gray-700 mb-4 flex items-center gap-2">
-            <Zap class="w-4 h-4" />
-            执行进度
-          </h3>
-          
-          <div class="flex items-center gap-8">
-            <!-- 阶段1: 需求分析 -->
-            <div class="flex-1">
-              <div class="flex items-center gap-3 mb-3">
-                <div :class="[
-                  'w-10 h-10 rounded-xl flex items-center justify-center',
-                  taskDetail.requirement_phase_status === 'completed' ? 'bg-green-100' :
-                  taskDetail.requirement_phase_status === 'running' ? 'bg-blue-100' :
-                  taskDetail.requirement_phase_status === 'failed' ? 'bg-red-100' :
-                  'bg-gray-100'
-                ]">
-                  <component 
-                    :is="getPhaseIcon(taskDetail.requirement_phase_status)" 
-                    :class="[
-                      'w-5 h-5',
-                      taskDetail.requirement_phase_status === 'completed' ? 'text-green-600' :
-                      taskDetail.requirement_phase_status === 'running' ? 'text-blue-600 animate-spin' :
-                      taskDetail.requirement_phase_status === 'failed' ? 'text-red-600' :
-                      'text-gray-400'
-                    ]" 
-                  />
-                </div>
-                <div>
-                  <div class="font-medium text-gray-900">阶段1: 需求分析</div>
-                  <div class="text-sm text-gray-500">
-                    <template v-if="taskDetail.requirement_phase_status === 'completed'">
-                      已提取 {{ taskDetail.saved_requirements }} 个功能点
-                    </template>
-                    <template v-else-if="taskDetail.requirement_phase_status === 'running'">
-                      {{ taskDetail.requirement_phase_progress }}%
-                    </template>
-                    <template v-else-if="taskDetail.requirement_phase_status === 'failed'">
-                      执行失败
-                    </template>
-                    <template v-else>
-                      等待开始
-                    </template>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- 进度条 -->
-              <div v-if="taskDetail.requirement_phase_status === 'running'" class="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div 
-                  class="h-full bg-blue-500 rounded-full transition-all duration-500"
-                  :style="{ width: `${taskDetail.requirement_phase_progress}%` }"
-                ></div>
-              </div>
-              <div v-else class="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div 
-                  :class="[
-                    'h-full rounded-full transition-all duration-500',
-                    taskDetail.requirement_phase_status === 'completed' ? 'bg-green-500' :
-                    taskDetail.requirement_phase_status === 'failed' ? 'bg-red-500' :
-                    'bg-gray-300'
-                  ]"
-                  :style="{ width: taskDetail.requirement_phase_status === 'completed' ? '100%' : '0%' }"
-                ></div>
-              </div>
-            </div>
-            
-            <!-- 箭头 -->
-            <ArrowRight class="w-6 h-6 text-gray-300 flex-shrink-0" />
-            
-            <!-- 阶段2: 用例生成 -->
-            <div class="flex-1">
-              <div class="flex items-center gap-3 mb-3">
-                <div :class="[
-                  'w-10 h-10 rounded-xl flex items-center justify-center',
-                  taskDetail.testcase_phase_status === 'completed' ? 'bg-green-100' :
-                  taskDetail.testcase_phase_status === 'running' ? 'bg-blue-100' :
-                  taskDetail.testcase_phase_status === 'failed' ? 'bg-red-100' :
-                  'bg-gray-100'
-                ]">
-                  <component 
-                    :is="getPhaseIcon(taskDetail.testcase_phase_status)" 
-                    :class="[
-                      'w-5 h-5',
-                      taskDetail.testcase_phase_status === 'completed' ? 'text-green-600' :
-                      taskDetail.testcase_phase_status === 'running' ? 'text-blue-600 animate-spin' :
-                      taskDetail.testcase_phase_status === 'failed' ? 'text-red-600' :
-                      'text-gray-400'
-                    ]" 
-                  />
-                </div>
-                <div>
-                  <div class="font-medium text-gray-900">阶段2: 用例生成</div>
-                  <div class="text-sm text-gray-500">
-                    <template v-if="taskDetail.testcase_phase_status === 'completed'">
-                      已生成 {{ taskDetail.saved_testcases }} 个用例
-                    </template>
-                    <template v-else-if="taskDetail.testcase_phase_status === 'running'">
-                      {{ taskDetail.testcase_phase_progress }}%
-                    </template>
-                    <template v-else-if="taskDetail.testcase_phase_status === 'failed'">
-                      执行失败
-                    </template>
-                    <template v-else>
-                      等待开始
-                    </template>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- 进度条 -->
-              <div v-if="taskDetail.testcase_phase_status === 'running'" class="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div 
-                  class="h-full bg-blue-500 rounded-full transition-all duration-500"
-                  :style="{ width: `${taskDetail.testcase_phase_progress}%` }"
-                ></div>
-              </div>
-              <div v-else class="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div 
-                  :class="[
-                    'h-full rounded-full transition-all duration-500',
-                    taskDetail.testcase_phase_status === 'completed' ? 'bg-green-500' :
-                    taskDetail.testcase_phase_status === 'failed' ? 'bg-red-500' :
-                    'bg-gray-300'
-                  ]"
-                  :style="{ width: taskDetail.testcase_phase_status === 'completed' ? '100%' : '0%' }"
-                ></div>
-              </div>
-            </div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Zap class="w-4 h-4" />
+              执行进度
+            </h3>
+            <span :class="[
+              'px-2 py-0.5 rounded-full text-xs',
+              taskDetail.status === 'completed' ? 'bg-green-100 text-green-700' :
+              taskDetail.status === 'running' ? 'bg-blue-100 text-blue-700' :
+              taskDetail.status === 'failed' ? 'bg-red-100 text-red-700' :
+              'bg-gray-100 text-gray-600'
+            ]">
+              {{ taskDetail.status === 'completed' ? '已完成' :
+                 taskDetail.status === 'running' ? '进行中' :
+                 taskDetail.status === 'failed' ? '失败' :
+                 taskDetail.status === 'pending' ? '排队中' : taskDetail.status }}
+            </span>
           </div>
-          
-          <!-- 整体进度 -->
-          <div class="mt-6 pt-6 border-t border-gray-100">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-sm text-gray-600">整体进度</span>
-              <span class="text-sm font-medium text-gray-900">{{ taskDetail.progress }}%</span>
-            </div>
-            <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div class="flex items-center gap-3">
+            <div class="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
               <div 
-                class="h-full bg-gradient-to-r from-primary to-purple-500 rounded-full transition-all duration-500"
+                :class="[
+                  'h-full rounded-full transition-all duration-500',
+                  taskDetail.status === 'completed' ? 'bg-green-500' :
+                  taskDetail.status === 'failed' ? 'bg-red-500' :
+                  'bg-gradient-to-r from-primary to-purple-500'
+                ]"
                 :style="{ width: `${taskDetail.progress}%` }"
               ></div>
             </div>
+            <span class="text-sm font-medium text-gray-900 w-10 text-right">{{ taskDetail.progress }}%</span>
           </div>
         </div>
 
@@ -830,7 +719,7 @@ watch(() => taskDetail.value?.status, (newStatus) => {
             <div class="space-y-4">
               <div class="flex justify-between">
                 <span class="text-sm text-gray-500">项目</span>
-                <span class="text-sm font-medium text-gray-900">{{ taskDetail.project_id ? `项目${taskDetail.project_id}` : '未关联' }}</span>
+                <span class="text-sm font-medium text-gray-900">{{ taskDetail.project_name || '未关联' }}</span>
               </div>
               <div v-if="taskDetail.task_name" class="flex justify-between">
                 <span class="text-sm text-gray-500">任务名称</span>

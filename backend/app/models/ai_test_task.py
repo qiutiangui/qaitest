@@ -154,8 +154,17 @@ class AITestTask(models.Model):
         if saved_ids:
             self.saved_requirement_ids = saved_ids
         
-        # 根据阶段计算整体进度（需求分析占40%）
-        self.progress = int(progress * 0.4)
+        # 根据阶段计算整体进度和状态
+        if status == "running":
+            self.progress = int(progress * 0.4)
+            self.status = "running"
+        elif status == "completed":
+            self.progress = 40
+            self.status = "running"  # 需求完成后，用例生成阶段可能还没开始，保持 running
+        elif status == "failed":
+            self.status = "failed"
+        else:
+            self.progress = 0
         
         if status == "running" and self.started_at is None:
             self.started_at = datetime.now()
@@ -171,15 +180,13 @@ class AITestTask(models.Model):
         if saved_ids:
             self.saved_testcase_ids = saved_ids
         
-        # 根据阶段计算整体进度（需求分析占40%，用例生成占60%）
+        # 根据阶段计算整体进度和状态
         if status == "completed":
             self.progress = 100
+            self.status = "completed"
         else:
             self.progress = 40 + int(progress * 0.6)
-        
-        if status == "running" and self.requirement_phase_status == "completed":
-            # 用例生成开始时，记录开始时间
-            pass
+            self.status = "running"
         
         await self.save()
     

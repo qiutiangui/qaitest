@@ -59,6 +59,16 @@ async def update_task_progress(task_id: str, phase_code: str, phase_name: str,
         if not task:
             return
         
+        # 如果没有传入 requirement_status，从数据库获取当前值
+        if requirement_status is None:
+            requirement_status = task.requirement_phase_status
+        if requirement_progress is None:
+            requirement_progress = task.requirement_phase_progress
+        if testcase_status is None:
+            testcase_status = task.testcase_phase_status
+        if testcase_progress is None:
+            testcase_progress = task.testcase_phase_progress
+        
         # 更新阶段信息
         if phase_code:
             await task.update_phase(phase_code, phase_name, status)
@@ -81,7 +91,7 @@ async def update_task_progress(task_id: str, phase_code: str, phase_name: str,
         if saved_testcases is not None:
             task.saved_testcases = saved_testcases
         
-        # 计算整体进度
+        # 计算整体进度和状态
         if requirement_status == "completed" and testcase_status == "completed":
             task.progress = 100
             task.status = "completed"
@@ -96,10 +106,14 @@ async def update_task_progress(task_id: str, phase_code: str, phase_name: str,
             elif testcase_status == "completed":
                 task.progress = 100
                 task.status = "completed"
+            elif testcase_status == "pending":
+                task.status = "pending"
         elif requirement_status == "failed":
             task.status = "failed"
         elif testcase_status == "failed":
             task.status = "failed"
+        elif testcase_status == "running":
+            task.status = "running"
         
         # 记录开始时间
         if task.status == "running" and task.started_at is None:

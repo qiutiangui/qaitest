@@ -98,6 +98,21 @@ def _fix_json_format(json_str: str) -> str:
     """修复常见的JSON格式问题"""
     result = json_str
     
+    # 0. 修复无效的控制字符（必须最先处理）
+    # JSON中的控制字符必须是 \n, \r, \t 等转义形式
+    # 移除或替换在字符串外部的控制字符
+    result = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', result)
+    
+    # 0.1 智能处理字符串值内的未转义换行符
+    # 匹配 "..." 字符串内容，处理其中的字面换行符
+    def fix_string_newlines(match):
+        content = match.group(1)
+        # 将字面换行符替换为转义的 \n
+        content = content.replace('\r\n', '\\n').replace('\n', '\\n')
+        return '"' + content + '"'
+    
+    result = re.sub(r'"((?:[^"\\]|\\.)*)"', fix_string_newlines, result)
+    
     # 1. 移除单引号，改用双引号 (简单替换)
     # 需要处理中文等Unicode字符不受影响
     result = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", lambda m: '"' + m.group(1).replace('"', '\\"') + '"', result)
@@ -1720,7 +1735,8 @@ async def run_testcase_generation(
             except Exception as e:
                 logger.error(f"JSON解析失败: {e}")
                 await push_log(task_id, "用例生成", f"⚠️ 「{requirement.name}」JSON解析失败: {str(e)[:50]}", "thinking")
-        
+                raise  # 抛出异常，交由外层统一处理（testcases.py 第273行）
+
         stage_timings['testcase_generation'] = time.time() - stage2_start
         
         # ========== 阶段3：AI评审 ==========
@@ -1951,6 +1967,7 @@ async def run_testcase_generation(
         except Exception as e:
             logger.error(f"入库失败: {e}")
             await push_log(task_id, "System", f"❌ 入库失败: {str(e)}", "error")
+            raise  # 抛出异常，交由外层统一处理（testcases.py 第273行）
 
         # 无论成功失败都继续执行
         await push_log(task_id, "数据保存", f"💾 已保存 {len(saved_ids)} 个测试用例到数据库", "complete")

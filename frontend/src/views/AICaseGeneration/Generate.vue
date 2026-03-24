@@ -1830,7 +1830,7 @@ const formatDateTime = (timestamp: string): string => {
                   'bg-gray-100 text-gray-400'
                 ]"
               >
-                <span v-if="getStepStatus(1, step) === 'completed'">✓</span>
+                <span v-if="getStepStatus(1, step) === 'completed'">✓ {{ ['摘要', '分析', '输出'][step - 1] }}</span>
                 <span v-else>{{ ['摘要', '分析', '输出'][step - 1] }}</span>
               </div>
             </div>
@@ -1849,7 +1849,7 @@ const formatDateTime = (timestamp: string): string => {
                   'bg-gray-100 text-gray-400'
                 ]"
               >
-                <span v-if="getStepStatus(2, idx + 1) === 'completed'">✓</span>
+                <span v-if="getStepStatus(2, idx + 1) === 'completed'">✓ {{ ['生成', '评审', '定稿', '保存'][idx] }}</span>
                 <span v-else>{{ ['生成', '评审', '定稿', '保存'][idx] }}</span>
               </div>
             </div>
