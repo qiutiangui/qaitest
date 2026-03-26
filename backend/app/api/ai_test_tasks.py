@@ -22,7 +22,7 @@ class AITestTaskCreate(BaseModel):
     version_id: Optional[int] = None
     task_name: Optional[str] = None
     description: str = ""
-    input_source: str = "description"  # file/feishu/description
+    input_source: str = "description"  # file/description
     input_filename: Optional[str] = None
     generation_model: Optional[str] = None
     review_model: Optional[str] = None
@@ -169,17 +169,26 @@ async def create_ai_test_task(
     task_name: Optional[str] = Form(None, description="任务名称"),
     description: str = Form("", description="需求描述"),
     file: Optional[UploadFile] = File(None, description="需求文档文件"),
-    source: Optional[str] = Form(None, description="来源：feishu"),
-    feishu_url: Optional[str] = Form(None, description="飞书文档URL"),
+    llm_config_json: Optional[str] = Form(None, alias="llm_config", description="模型配置JSON字符串"),
 ):
     """
     创建并启动AI测试任务（统一入口）
-    
+
     流程：
     1. 需求分析：文档解析 → 功能点提取 → 功能点保存
     2. 用例生成：用例设计 → 用例评审 → 用例保存
     """
     logger.info(f"创建AI测试任务: project_id={project_id}, task_name={task_name}")
+
+    # 解析 llm_config
+    llm_config = None
+    if llm_config_json:
+        try:
+            import json
+            llm_config = json.loads(llm_config_json)
+            logger.info(f"收到模型配置: {llm_config}")
+        except Exception as e:
+            logger.warning(f"解析 llm_config 失败: {e}")
     
     # 生成任务ID
     task_id = str(uuid.uuid4())
@@ -202,25 +211,6 @@ async def create_ai_test_task(
         except Exception as e:
             logger.error(f"文件读取失败: {e}")
             raise HTTPException(status_code=400, detail=f"文件读取失败: {str(e)}")
-    
-    # 飞书来源
-    if source == 'feishu' and feishu_url:
-        input_source = "feishu"
-        try:
-            from app.rag.readers import FeishuReader
-            from app.config import settings
-            
-            app_id = getattr(settings, 'feishu_app_id', None)
-            app_secret = getattr(settings, 'feishu_app_secret', None)
-            
-            if app_id and app_secret:
-                reader = FeishuReader(app_id=app_id, app_secret=app_secret)
-                docs = await reader.load_data_from_url(feishu_url)
-                if docs:
-                    document_content = docs[0].text
-                    logger.info(f"从飞书文档加载内容成功，长度: {len(document_content)}")
-        except Exception as e:
-            logger.error(f"从飞书读取内容失败: {e}")
     
     # 如果task_name为空，生成默认值
     if not task_name:
@@ -246,7 +236,7 @@ async def create_ai_test_task(
     async def run_unified_task():
         from app.agents.unified_workflow import run_unified_ai_test_workflow
         from app.api.websocket import push_to_websocket
-        
+
         try:
             await run_unified_ai_test_workflow(
                 task_id=task_id,
@@ -255,6 +245,7 @@ async def create_ai_test_task(
                 task_name=task_name,
                 document_content=document_content,
                 description=description,
+                llm_config=llm_config,
             )
         except Exception as e:
             logger.error(f"AI测试任务失败: {e}", exc_info=True)

@@ -91,6 +91,8 @@ class QwenEmbeddingModel(BaseEmbedding):
     async def _get_embedding(self, text: str) -> List[float]:
         """调用 API 获取嵌入向量"""
         
+        logger.info(f"[Embedding Debug] api_key length: {len(self._api_key) if self._api_key else 0}, api_key prefix: {self._api_key[:10] if self._api_key else 'None'}...")
+        
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json"
@@ -115,7 +117,11 @@ class QwenEmbeddingModel(BaseEmbedding):
         
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
+                logger.info(f"[Embedding Debug] Request URL: {url}")
+                logger.info(f"[Embedding Debug] Request headers: {headers}")
+                logger.info(f"[Embedding Debug] Request data: {data}")
                 response = await client.post(url, headers=headers, json=data)
+                logger.info(f"[Embedding Debug] Response status: {response.status_code}")
                 response.raise_for_status()
                 
                 result = response.json()

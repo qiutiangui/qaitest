@@ -171,75 +171,97 @@ class ModelClientManager:
         self._db_clients.clear()
         logger.info("已清除数据库模型客户端缓存")
     
-    def create_dynamic_client(self, config: ModelConfig) -> OpenAIChatCompletionClient:
+    async def create_dynamic_client_async(self, config: ModelConfig) -> OpenAIChatCompletionClient:
         """
-        根据用户配置动态创建模型客户端
-        
+        根据用户配置动态创建模型客户端（异步版本，优先从数据库获取配置）
+
         Args:
             config: 用户指定的模型配置
-            
+
         Returns:
             OpenAIChatCompletionClient实例
-            
-        注意：此同步版本不支持从数据库获取配置，需要使用 create_dynamic_client_async
         """
-        # 内置模型配置映射
-        provider_defaults = {
-            ModelProvider.DEEPSEEK: {
-                "default_model": settings.deepseek_model or "deepseek-chat",
-                "default_base_url": settings.deepseek_base_url or "https://api.deepseek.com/v1",
-                "default_api_key": settings.deepseek_api_key,
-            },
-            ModelProvider.MOONSHOT: {
-                "default_model": settings.moonshot_model or "moonshot-v1-32k",
-                "default_base_url": settings.moonshot_base_url or "https://api.moonshot.cn/v1",
-                "default_api_key": settings.moonshot_api_key,
-            },
-            ModelProvider.QWEN: {
-                "default_model": settings.qwen_model or "qwen-plus",
-                "default_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                "default_api_key": settings.dashscope_api_key,
-            },
-            ModelProvider.OLLAMA: {
-                "default_model": config.model or "llama3.2",
-                "default_base_url": config.base_url or "http://localhost:11434/v1",
-                "default_api_key": "ollama",
-            },
-        }
-        
-        if config.provider not in provider_defaults:
-            raise ValueError(f"不支持的模型提供商: {config.provider}")
-        
-        prov_defaults = provider_defaults[config.provider]
-        
-        # 优先级：用户指定 > 环境变量/默认值
-        model = config.model or prov_defaults["default_model"]
-        base_url = config.base_url or prov_defaults["default_base_url"]
-        api_key = config.api_key or prov_defaults["default_api_key"]
-        
-        # 对于 Ollama，使用占位符 api_key
-        if config.provider == ModelProvider.OLLAMA:
-            api_key = api_key or "ollama"
-        
-        if not api_key:
-            logger.warning(f"{config.provider.value} API Key未配置，将使用模拟模式")
-            return self._create_mock_client()
-        
+        from app.models.llm_model import LLMModelConfig
+
+        logger.info(f"[create_dynamic_client_async] 收到配置: provider={config.provider}, model={config.model}, custom_id={config.custom_id}")
+
+        db_model = None
+
+        # 1. 如果指定了 custom_id，直接从数据库按 ID 查找
+        if config.custom_id:
+            db_model = await LLMModelConfig.get_or_none(id=config.custom_id, enabled=True)
+            if not db_model:
+                raise ValueError(f"自定义模型不存在或已禁用: ID={config.custom_id}")
+
+        # 2. 否则根据 provider + model 组合从数据库查找
+        elif config.model:
+            db_model = await LLMModelConfig.get_or_none(
+                provider=config.provider.value,
+                default_model=config.model,
+                enabled=True
+            )
+            if not db_model:
+                db_model = await LLMModelConfig.get_or_none(
+                    provider=config.provider.value,
+                    enabled=True
+                )
+            if not db_model:
+                raise ValueError(
+                    f"数据库中未找到模型配置: provider={config.provider.value}, model={config.model}。"
+                    f"请在【设置->模型配置】中添加该模型配置。"
+                )
+
+        else:
+            db_model = await LLMModelConfig.get_or_none(
+                provider=config.provider.value,
+                enabled=True
+            )
+            if not db_model:
+                raise ValueError(
+                    f"数据库中未找到 provider={config.provider.value} 的可用模型。"
+                    f"请在【设置->模型配置】中添加该模型配置。"
+                )
+
+        # 处理 Ollama 等不需要 API Key 的情况
+        api_key = db_model.api_key
+        if not api_key and config.provider == ModelProvider.OLLAMA:
+            api_key = "ollama"
+
         client = OpenAIChatCompletionClient(
-            model=model,
-            base_url=base_url,
+            model=db_model.default_model,
+            base_url=db_model.base_url,
             api_key=api_key,
             model_info={
                 "vision": False,
                 "function_calling": True,
                 "json_output": True,
                 "structured_output": True,
-                "family": config.provider.value,
+                "family": db_model.provider,
             }
         )
-        
-        logger.info(f"动态创建模型客户端: {config.provider.value}/{model} (base_url={base_url})")
+
+        logger.info(f"[create_dynamic_client_async] 创建模型客户端成功: {db_model.name}")
         return client
+
+    def create_dynamic_client(self, config: ModelConfig) -> OpenAIChatCompletionClient:
+        """
+        根据用户配置动态创建模型客户端（同步版本，已弃用）
+
+        注意：此同步版本不支持异步数据库查询。
+        请使用 create_dynamic_client_async 方法。
+
+        Args:
+            config: 用户指定的模型配置
+
+        Returns:
+            OpenAIChatCompletionClient实例
+        """
+        # 已弃用，同步版本无法从数据库查询
+        # 抛出明确错误，引导用户使用异步版本
+        raise RuntimeError(
+            "create_dynamic_client 是同步版本，不支持从数据库查询配置。"
+            "请使用异步版本的 get_model_clients 函数。"
+        )
     
     def _create_mock_client(self) -> OpenAIChatCompletionClient:
         """创建模拟客户端（用于测试）"""
@@ -318,103 +340,96 @@ async def get_model_clients(
     """
     获取需求分析、用例生成、用例评审模型客户端（异步版本）
 
+    重要：所有配置统一从数据库获取，不再使用硬编码的默认值。
+    前端传递的 provider + model 组合用于在数据库中查找对应配置。
+
     Args:
-        requirement_analyze_config: 需求分析模型配置，为None则使用默认DeepSeek
-        testcase_generate_config: 用例生成模型配置，为None则使用默认DeepSeek
-        testcase_review_config: 用例评审模型配置，为None则使用默认评审模型
+        requirement_analyze_config: 需求分析模型配置，为None则从数据库按用途获取
+        testcase_generate_config: 用例生成模型配置，为None则从数据库按用途获取
+        testcase_review_config: 用例评审模型配置，为None则从数据库按用途获取
 
     Returns:
         (requirement_analyze_client, testcase_generate_client, testcase_review_client) 元组
     """
-    from app.models.custom_model import CustomModel
     from app.services.llm_model_service import LLMModelService
-    
-    async def get_custom_model_async(custom_id: int):
-        return await CustomModel.get_or_none(id=custom_id)
-    
-    # 内置模型配置映射
-    provider_defaults = {
-        ModelProvider.DEEPSEEK: {
-            "default_model": settings.deepseek_model or "deepseek-chat",
-            "default_base_url": settings.deepseek_base_url or "https://api.deepseek.com/v1",
-            "default_api_key": settings.deepseek_api_key,
-        },
-        ModelProvider.MOONSHOT: {
-            "default_model": settings.moonshot_model or "moonshot-v1-32k",
-            "default_base_url": settings.moonshot_base_url or "https://api.moonshot.cn/v1",
-            "default_api_key": settings.moonshot_api_key,
-        },
-        ModelProvider.QWEN: {
-            "default_model": settings.qwen_model or "qwen-plus",
-            "default_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "default_api_key": settings.dashscope_api_key,
-        },
-        ModelProvider.OLLAMA: {
-            "default_model": "llama3.2",
-            "default_base_url": "http://localhost:11434/v1",
-            "default_api_key": "ollama",
-        },
-    }
-    
-    async def create_client_async(config: ModelConfig) -> OpenAIChatCompletionClient:
-        # 如果是自定义模型
-        if config.provider == ModelProvider.CUSTOM:
-            if not config.custom_id:
-                raise ValueError("自定义模型必须指定 custom_id")
-            custom_model = await get_custom_model_async(config.custom_id)
-            if not custom_model:
-                raise ValueError(f"自定义模型不存在: {config.custom_id}")
-            if not custom_model.enabled:
-                raise ValueError(f"自定义模型已禁用: {custom_model.display_name}")
-            return OpenAIChatCompletionClient(
-                model=config.model or custom_model.default_model,
-                base_url=custom_model.base_url,
-                api_key=custom_model.api_key,
-                model_info={
-                    "vision": False,
-                    "function_calling": True,
-                    "json_output": True,
-                    "structured_output": True,
-                    "family": "custom",
-                }
+    from app.models.llm_model import LLMModelConfig
+
+    async def get_model_by_config(config: ModelConfig) -> OpenAIChatCompletionClient:
+        """
+        根据 ModelConfig 创建模型客户端。
+
+        优先级：
+        1. 如果指定了 custom_id，直接从数据库按 ID 查找
+        2. 否则根据 provider + model 组合从数据库查找匹配的配置
+        3. 如果数据库没有对应配置，抛出错误（不再使用硬编码默认值）
+        """
+        logger.info(f"[get_model_by_config] 收到配置: provider={config.provider}, model={config.model}, custom_id={config.custom_id}")
+
+        db_model = None
+
+        # 1. 如果指定了 custom_id，直接从数据库按 ID 查找
+        if config.custom_id:
+            db_model = await LLMModelConfig.get_or_none(id=config.custom_id, enabled=True)
+            if not db_model:
+                raise ValueError(f"自定义模型不存在或已禁用: ID={config.custom_id}")
+            logger.info(f"[get_model_by_config] 从ID找到模型: {db_model.name}")
+
+        # 2. 否则根据 provider + model 组合从数据库查找
+        elif config.model:
+            # 需要精确匹配 provider 和 default_model
+            db_model = await LLMModelConfig.get_or_none(
+                provider=config.provider.value,
+                default_model=config.model,
+                enabled=True
             )
-        
-        # 内置模型 - 直接使用配置中的值，无需从数据库查询 provider
-        prov_defaults = provider_defaults.get(config.provider, {})
-        
-        # 优先级：config > provider_defaults > db_model
-        model = config.model or prov_defaults.get("default_model")
-        base_url = config.base_url or prov_defaults.get("default_base_url")
-        api_key = config.api_key or prov_defaults.get("default_api_key")
-        
-        if config.provider == ModelProvider.OLLAMA:
-            api_key = api_key or "ollama"
-        
-        if not api_key:
-            logger.warning(f"{config.provider.value} API Key未配置")
-            return OpenAIChatCompletionClient(
-                model="gpt-3.5-turbo",
-                api_key="mock-key",
-                base_url="https://api.openai.com/v1",
+            if not db_model:
+                # 尝试只按 provider 查找，找第一个启用的
+                db_model = await LLMModelConfig.get_or_none(
+                    provider=config.provider.value,
+                    enabled=True
+                )
+            if not db_model:
+                raise ValueError(
+                    f"数据库中未找到模型配置: provider={config.provider.value}, model={config.model}。"
+                    f"请在【设置->模型配置】中添加该模型配置。"
+                )
+            logger.info(f"[get_model_by_config] 从provider+model找到模型: {db_model.name}")
+
+        else:
+            # 没有指定 model，只指定了 provider，查找第一个匹配的启用模型
+            db_model = await LLMModelConfig.get_or_none(
+                provider=config.provider.value,
+                enabled=True
             )
-        
+            if not db_model:
+                raise ValueError(
+                    f"数据库中未找到 provider={config.provider.value} 的可用模型。"
+                    f"请在【设置->模型配置】中添加该模型配置。"
+                )
+
+        # 3. 使用数据库中的配置创建客户端
+        # 处理 Ollama 等不需要 API Key 的情况
+        api_key = db_model.api_key
+        if not api_key and config.provider == ModelProvider.OLLAMA:
+            api_key = "ollama"
+
         return OpenAIChatCompletionClient(
-            model=model,
-            base_url=base_url,
+            model=db_model.default_model,
+            base_url=db_model.base_url,
             api_key=api_key,
             model_info={
                 "vision": False,
                 "function_calling": True,
                 "json_output": True,
                 "structured_output": True,
-                "family": config.provider.value,
+                "family": db_model.provider,
             }
         )
-    
+
     # 需求分析模型
     if requirement_analyze_config:
-        logger.info(f"[get_model_clients] 使用传入配置创建需求分析客户端: provider={requirement_analyze_config.provider}, model={requirement_analyze_config.model}")
-        requirement_analyze_client = await create_client_async(requirement_analyze_config)
+        logger.info(f"[get_model_clients] 使用传入配置创建需求分析客户端")
+        requirement_analyze_client = await get_model_by_config(requirement_analyze_config)
     else:
         # 从数据库获取默认模型配置（按用途获取）
         db_req_model = await LLMModelService.get_model_for_purpose("requirement_analyze")
@@ -425,15 +440,14 @@ async def get_model_clients(
                 base_url=db_req_model.base_url,
                 api_key=db_req_model.api_key
             )
-            requirement_analyze_client = await create_client_async(req_config)
+            requirement_analyze_client = await get_model_by_config(req_config)
         else:
-            # 没有配置时抛出错误，而不是使用 mock 客户端
             raise ValueError("未配置需求分析模型，请在【设置->模型配置】中配置")
 
     # 用例生成模型
     if testcase_generate_config:
-        logger.info(f"[get_model_clients] 使用传入配置创建生成客户端: provider={testcase_generate_config.provider}, model={testcase_generate_config.model}")
-        testcase_generate_client = await create_client_async(testcase_generate_config)
+        logger.info(f"[get_model_clients] 使用传入配置创建生成客户端")
+        testcase_generate_client = await get_model_by_config(testcase_generate_config)
     else:
         # 从数据库获取默认模型配置（按用途获取）
         db_gen_model = await LLMModelService.get_model_for_purpose("testcase_generate")
@@ -444,15 +458,14 @@ async def get_model_clients(
                 base_url=db_gen_model.base_url,
                 api_key=db_gen_model.api_key
             )
-            testcase_generate_client = await create_client_async(gen_config)
+            testcase_generate_client = await get_model_by_config(gen_config)
         else:
-            # 没有配置时抛出错误，而不是使用 mock 客户端
             raise ValueError("未配置用例生成模型，请在【设置->模型配置】中配置")
 
     # 用例评审模型
     if testcase_review_config:
-        logger.info(f"[get_model_clients] 使用传入配置创建评审客户端: provider={testcase_review_config.provider}, model={testcase_review_config.model}")
-        testcase_review_client = await create_client_async(testcase_review_config)
+        logger.info(f"[get_model_clients] 使用传入配置创建评审客户端")
+        testcase_review_client = await get_model_by_config(testcase_review_config)
     else:
         # 从数据库获取默认模型配置（按用途获取）
         db_rev_model = await LLMModelService.get_model_for_purpose("testcase_review")
@@ -463,9 +476,8 @@ async def get_model_clients(
                 base_url=db_rev_model.base_url,
                 api_key=db_rev_model.api_key
             )
-            testcase_review_client = await create_client_async(rev_config)
+            testcase_review_client = await get_model_by_config(rev_config)
         else:
-            # 没有配置时抛出错误，而不是使用 mock 客户端
             raise ValueError("未配置用例评审模型，请在【设置->模型配置】中配置")
 
     return requirement_analyze_client, testcase_generate_client, testcase_review_client

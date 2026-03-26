@@ -112,8 +112,11 @@ export const aiTestApi = {
     task_name?: string
     description?: string
     file?: File
-    source?: string
-    feishu_url?: string
+    llm_config?: {
+      requirement_analyze_model?: { provider: string; custom_id?: number; model?: string }
+      testcase_generate_model?: { provider: string; custom_id?: number; model?: string }
+      testcase_review_model?: { provider: string; custom_id?: number; model?: string }
+    }
   }): Promise<{ task_id: string; message: string }> {
     const formData = new FormData()
     if (params.project_id) formData.append('project_id', String(params.project_id))
@@ -121,9 +124,11 @@ export const aiTestApi = {
     if (params.task_name) formData.append('task_name', params.task_name)
     if (params.description) formData.append('description', params.description)
     if (params.file) formData.append('file', params.file)
-    if (params.source) formData.append('source', params.source)
-    if (params.feishu_url) formData.append('feishu_url', params.feishu_url)
-    
+    // 添加 llm_config
+    if (params.llm_config) {
+      formData.append('llm_config', JSON.stringify(params.llm_config))
+    }
+
     return api.post('/ai-test/create', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })

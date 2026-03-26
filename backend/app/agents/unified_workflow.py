@@ -466,13 +466,27 @@ def parse_testcase_json(content: str) -> List[Dict[str, Any]]:
 
 # ============ 阶段1: 需求分析 ============
 
-async def run_requirement_analysis(task_id: str, project_id: Optional[int], version_id: Optional[int],
-                                   requirement_name: str, document_content: str, description: str):
+async def run_requirement_analysis(
+    task_id: str,
+    project_id: Optional[int],
+    version_id: Optional[int],
+    requirement_name: str,
+    document_content: str,
+    description: str,
+    llm_config: Optional[Dict[str, Any]] = None
+):
     """
     执行需求分析阶段
+
+    Args:
+        llm_config: 模型配置，格式如：
+            {
+                "requirement_analyze_model": {"provider": "custom", "custom_id": 16, "model": "deepseek-chat"}
+            }
     """
-    from app.agents.runtime import get_deepseek_client, get_qwen_client
+    from app.agents.runtime import get_model_clients
     from autogen_agentchat.agents import AssistantAgent
+    from app.schemas.model_config import ModelConfig, ModelProvider
     
     # 更新阶段状态
     await update_task_progress(
@@ -531,7 +545,18 @@ async def run_requirement_analysis(task_id: str, project_id: Optional[int], vers
         requirement_status="running", requirement_progress=15
     )
     await push_log(task_id, "需求分析", "⏳ 正在分析需求文档...", "thinking")
-    
+
+    # 获取模型客户端
+    req_analyze_config = None
+    if llm_config and llm_config.get("requirement_analyze_model"):
+        model_cfg = llm_config["requirement_analyze_model"]
+        req_analyze_config = ModelConfig(
+            provider=ModelProvider(model_cfg.get("provider", "custom")),
+            custom_id=model_cfg.get("custom_id"),
+            model=model_cfg.get("model"),
+        )
+        logger.info(f"[需求分析] 使用配置模型: {model_cfg}")
+
     analysis_prompt = """
     你是一位专业的软件需求文档分析师。请仔细阅读并理解需求文档内容，然后进行整理和摘要。
     
@@ -547,10 +572,23 @@ async def run_requirement_analysis(task_id: str, project_id: Optional[int], vers
     
     请以结构化、层次清晰的 Markdown 格式输出你的分析摘要。
     """
-    
+
+    # 获取模型客户端
+    try:
+        clients = await get_model_clients(
+            requirement_analyze_config=req_analyze_config,
+            testcase_generate_config=None,
+            testcase_review_config=None,
+        )
+        req_analyze_client = clients[0]
+        logger.info(f"[需求分析] 模型客户端创建成功")
+    except Exception as e:
+        logger.error(f"[需求分析] 获取模型客户端失败: {e}")
+        raise ValueError(f"获取需求分析模型失败: {e}")
+
     acquisition_agent = AssistantAgent(
         name='acquisition_agent',
-        model_client=get_deepseek_client(),
+        model_client=req_analyze_client,
         system_message=analysis_prompt,
         model_client_stream=False
     )
@@ -590,10 +628,11 @@ async def run_requirement_analysis(task_id: str, project_id: Optional[int], vers
   ]
 }
 """
-    
+
+    # 功能点提取也使用同一个模型客户端
     output_agent = AssistantAgent(
         name='output_agent',
-        model_client=get_qwen_client(),
+        model_client=req_analyze_client,  # 复用需求分析模型
         system_message=output_prompt,
         model_client_stream=False
     )
@@ -701,13 +740,58 @@ def _create_default_requirements(content: str, requirement_name: str = "") -> Li
 
 # ============ 阶段2: 用例生成 ============
 
-async def run_testcase_generation(task_id: str, project_id: Optional[int], version_id: Optional[int],
-                                  requirement_ids: List[int]):
+async def run_testcase_generation(
+    task_id: str,
+    project_id: Optional[int],
+    version_id: Optional[int],
+    requirement_ids: List[int],
+    llm_config: Optional[Dict[str, Any]] = None
+):
     """
     执行用例生成阶段
+
+    Args:
+        llm_config: 模型配置，格式如：
+            {
+                "testcase_generate_model": {"provider": "custom", "custom_id": 16, "model": "deepseek-chat"},
+                "testcase_review_model": {"provider": "custom", "custom_id": 17, "model": "qwen-plus"}
+            }
     """
-    from app.agents.runtime import get_model_clients, get_deepseek_client
+    from app.agents.runtime import get_model_clients
     from autogen_agentchat.agents import AssistantAgent
+    from app.schemas.model_config import ModelConfig, ModelProvider
+
+    # 获取模型配置
+    gen_analyze_config = None
+    gen_config = None
+    rev_config = None
+
+    if llm_config:
+        # 需求分析模型（用于用例生成过程中的需求分析）
+        if llm_config.get("requirement_analyze_model"):
+            model_cfg = llm_config["requirement_analyze_model"]
+            gen_analyze_config = ModelConfig(
+                provider=ModelProvider(model_cfg.get("provider", "custom")),
+                custom_id=model_cfg.get("custom_id"),
+                model=model_cfg.get("model"),
+            )
+        # 用例生成模型
+        if llm_config.get("testcase_generate_model"):
+            model_cfg = llm_config["testcase_generate_model"]
+            gen_config = ModelConfig(
+                provider=ModelProvider(model_cfg.get("provider", "custom")),
+                custom_id=model_cfg.get("custom_id"),
+                model=model_cfg.get("model"),
+            )
+        # 用例评审模型
+        if llm_config.get("testcase_review_model"):
+            model_cfg = llm_config["testcase_review_model"]
+            rev_config = ModelConfig(
+                provider=ModelProvider(model_cfg.get("provider", "custom")),
+                custom_id=model_cfg.get("custom_id"),
+                model=model_cfg.get("model"),
+            )
+        logger.info(f"[用例生成] 收到模型配置: gen_analyze={gen_analyze_config}, gen={gen_config}, rev={rev_config}")
     
     # 更新阶段状态
     await update_task_progress(
@@ -715,9 +799,19 @@ async def run_testcase_generation(task_id: str, project_id: Optional[int], versi
         testcase_status="running", testcase_progress=0
     )
     await push_log(task_id, "System", "🚀 阶段2：用例生成开始", "thinking")
-    
+
     # 获取模型客户端（使用异步版本）
-    _, generate_client, review_client = await get_model_clients(None, None)
+    try:
+        clients = await get_model_clients(
+            requirement_analyze_config=gen_analyze_config,
+            testcase_generate_config=gen_config,
+            testcase_review_config=rev_config,
+        )
+        _, generate_client, review_client = clients
+        logger.info(f"[用例生成] 模型客户端创建成功")
+    except Exception as e:
+        logger.error(f"[用例生成] 获取模型客户端失败: {e}")
+        raise ValueError(f"获取用例生成模型失败: {e}")
     
     # ========== 2.1 获取功能点 ==========
     await push_log(task_id, "用例生成", "📋 正在获取功能点...", "thinking")
@@ -1041,11 +1135,20 @@ async def run_unified_ai_test_workflow(
     task_name: str,
     document_content: str,
     description: str,
+    llm_config: Optional[Dict[str, Any]] = None,
 ):
     """
     统一AI测试工作流入口
-    
+
     整合需求分析和用例生成，一个任务卡片展示完整流程
+
+    Args:
+        llm_config: 模型配置，格式如：
+            {
+                "requirement_analyze_model": {"provider": "custom", "custom_id": 16, "model": "deepseek-chat"},
+                "testcase_generate_model": {"provider": "custom", "custom_id": 16, "model": "deepseek-chat"},
+                "testcase_review_model": {"provider": "custom", "custom_id": 17, "model": "qwen-plus"}
+            }
     """
     from app.api.websocket import push_to_websocket
     
@@ -1069,6 +1172,7 @@ async def run_unified_ai_test_workflow(
             requirement_name=task_name or "未命名需求",
             document_content=document_content,
             description=description,
+            llm_config=llm_config,
         )
         
         # 检查是否被取消
@@ -1093,6 +1197,7 @@ async def run_unified_ai_test_workflow(
             project_id=project_id,
             version_id=version_id,
             requirement_ids=requirement_ids,
+            llm_config=llm_config,
         )
         
         # 发送完成消息到WebSocket

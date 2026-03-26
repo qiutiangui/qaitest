@@ -491,9 +491,6 @@ class SmartChunker:
         return [c for c in chunks if c]
 
 
-# 飞书文档读取器
-from app.rag.readers.feishu_reader import FeishuReader
-
 # 导出解析器
 __all__ = [
     'EnhancedPDFReader',
@@ -501,5 +498,4 @@ __all__ = [
     'EnhancedMarkdownReader',
     'UniversalDocumentReader',
     'SmartChunker',
-    'FeishuReader',
 ]

@@ -53,7 +53,7 @@ class AITestTask(models.Model):
     saved_testcase_ids = fields.JSONField(null=True, description="保存的用例ID列表")
     
     # 任务输入（保存原始输入信息）
-    input_source = fields.CharField(max_length=50, null=True, description="输入来源：file/feishu/description")
+    input_source = fields.CharField(max_length=50, null=True, description="输入来源：file/description")
     input_filename = fields.CharField(max_length=255, null=True, description="原始文件名")
     document_content = fields.TextField(null=True, description="原始文档内容（可空，节省存储）")
     

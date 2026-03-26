@@ -63,6 +63,7 @@ class LlamaIndexIndexManager:
             
             config = await EmbeddingModelService.get_default_config()
             if config:
+                logger.info(f"从数据库获取到嵌入模型配置: name={config.name}, provider={config.provider}, api_key={'已设置' if config.api_key else '未设置'}, model={config.model_name}")
                 # 根据 provider 选择正确的嵌入模型类
                 if config.provider == "ollama":
                     self._embedding_model = OllamaEmbeddingModel(

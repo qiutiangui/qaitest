@@ -3,11 +3,11 @@ import { ref, computed, onMounted, onUnmounted, nextTick, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Upload, FileText, Send, Loader, CheckCircle, XCircle,
-  Download, Sparkles, Zap, ListChecks, TestTube, Link2, Copy, ArrowRight,
+  Download, Sparkles, Zap, ListChecks, TestTube, Copy, ArrowRight,
   BookOpen, MessageSquare, Database, Wand2, ShieldCheck, Settings, Eye,
   BarChart3, ClipboardCheck, Save
 } from 'lucide-vue-next'
-import { ElMessage, ElDrawer } from 'element-plus'
+import { ElMessage, ElLoading, ElDrawer } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import useProjectStore from '@/stores/project'
@@ -15,7 +15,6 @@ import useRequirementStore from '@/stores/requirement'
 import useTestcaseStore from '@/stores/testcase'
 import { requirementApi } from '@/api/requirement'
 import { testcaseApi } from '@/api/testcase'
-import ragApi from '@/api/rag'
 import { modelConfigApi } from '@/api/modelConfig'
 import { connectWebSocket, disconnectWebSocket, WebSocketMessage } from '@/api/websocket'
 
@@ -52,8 +51,8 @@ const renderMarkdown = (content: string): string => {
   return DOMPurify.sanitize(html, DOMPURIFY_CONFIG)
 }
 
-// Tab切换：手动输入 | 文档上传 | 飞书文档
-const inputMode = ref<'manual' | 'document' | 'feishu'>('document')
+// Tab切换：手动输入 | 文档上传
+const inputMode = ref<'manual' | 'document'>('document')
 
 // 控制输入面板显示（生成时隐藏）
 const showInputPanel = ref(true)
@@ -64,8 +63,7 @@ const requirementDescription = ref('')
 const selectedProjectId = ref<number | null>(null)
 const uploadedFiles = ref<File[]>([])
 const fileNames = ref<string[]>([])
-const feishuDocUrl = ref('')
-const isFeishuConfigured = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 // 模型配置
 const selectedRequirementAnalyzeModel = ref('')
@@ -443,8 +441,6 @@ const projects = computed(() => projectStore.projects)
 
 onMounted(async () => {
   await projectStore.fetchProjects({ page_size: 100 })
-  // 检查飞书配置
-  checkFeishuConfig()
   // 从后端API获取模型配置
   await loadModelConfig()
 })
@@ -455,33 +451,23 @@ const loadModelConfig = async () => {
     // 从后端API获取默认模型配置
     const response = await modelConfigApi.getModelStatus()
 
+    // 统一使用 custom:id:model_name 格式，这样可以精确定位数据库中的配置
+    // 不再区分 is_custom，因为所有模型都存储在数据库中
+
     // 需求分析模型
-    if (response.requirement_analyze?.configured && response.requirement_analyze.provider) {
-      if (response.requirement_analyze.is_custom) {
-        // 自定义模型格式: custom:custom_id:model_name
-        selectedRequirementAnalyzeModel.value = `custom:${response.requirement_analyze.id}:${response.requirement_analyze.model_name}`
-      } else {
-        // 内置模型格式: provider:model_name
-        selectedRequirementAnalyzeModel.value = `${response.requirement_analyze.provider}:${response.requirement_analyze.model_name}`
-      }
+    if (response.requirement_analyze?.configured && response.requirement_analyze.id) {
+      // 始终使用 custom:id:model_name 格式，确保精确定位
+      selectedRequirementAnalyzeModel.value = `custom:${response.requirement_analyze.id}:${response.requirement_analyze.model_name}`
     }
 
     // 用例生成模型
-    if (response.testcase_generate?.configured && response.testcase_generate.provider) {
-      if (response.testcase_generate.is_custom) {
-        selectedTestcaseGenerateModel.value = `custom:${response.testcase_generate.id}:${response.testcase_generate.model_name}`
-      } else {
-        selectedTestcaseGenerateModel.value = `${response.testcase_generate.provider}:${response.testcase_generate.model_name}`
-      }
+    if (response.testcase_generate?.configured && response.testcase_generate.id) {
+      selectedTestcaseGenerateModel.value = `custom:${response.testcase_generate.id}:${response.testcase_generate.model_name}`
     }
 
     // 用例评审模型
-    if (response.testcase_review?.configured && response.testcase_review.provider) {
-      if (response.testcase_review.is_custom) {
-        selectedTestcaseReviewModel.value = `custom:${response.testcase_review.id}:${response.testcase_review.model_name}`
-      } else {
-        selectedTestcaseReviewModel.value = `${response.testcase_review.provider}:${response.testcase_review.model_name}`
-      }
+    if (response.testcase_review?.configured && response.testcase_review.id) {
+      selectedTestcaseReviewModel.value = `custom:${response.testcase_review.id}:${response.testcase_review.model_name}`
     }
 
     console.log('模型配置已加载:', {
@@ -494,61 +480,43 @@ const loadModelConfig = async () => {
   }
 }
 
-// 检查飞书配置状态
-const checkFeishuConfig = async () => {
-  try {
-    const res = await ragApi.getFeishuConfig()
-    isFeishuConfigured.value = res.configured
-  } catch {
-    isFeishuConfigured.value = false
-  }
-}
-
 onUnmounted(() => {
   disconnectWebSocket()
 })
 
 // 文件上传处理（支持多文件）
-const handleFileUpload = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  if (target.files && target.files.length > 0) {
-    const validTypes = ['.txt', '.md', '.pdf', '.docx']
-    const newFiles: File[] = []
-    const invalidFiles: string[] = []
-
-    // 遍历所有选中的文件
-    Array.from(target.files).forEach(file => {
-      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
-
-      if (validTypes.includes(ext)) {
-        newFiles.push(file)
-      } else {
-        invalidFiles.push(file.name)
-      }
-    })
-
-    if (invalidFiles.length > 0) {
-      ElMessage.warning(`以下文件格式不支持: ${invalidFiles.join(', ')}`)
-    }
-
-    if (newFiles.length > 0) {
-      uploadedFiles.value = newFiles
-      fileNames.value = newFiles.map(f => f.name)
-      ElMessage.success(`已选择 ${newFiles.length} 个文件`)
-    }
+const handleFileUpload = () => {
+  const input = fileInputRef.value
+  if (!input || !input.files) {
+    return
   }
-}
-
-// 清除所有文件
-const clearAllFiles = () => {
+  
   uploadedFiles.value = []
   fileNames.value = []
+  
+  for (let i = 0; i < input.files.length; i++) {
+    const file = input.files[i]
+    uploadedFiles.value.push(file)
+    fileNames.value.push(file.name)
+  }
+  
+  // 清空input以允许重新选择相同文件
+  input.value = ''
 }
 
 // 移除单个文件
 const removeFile = (index: number) => {
   uploadedFiles.value.splice(index, 1)
   fileNames.value.splice(index, 1)
+}
+
+// 清空全部文件
+const clearAllFiles = () => {
+  uploadedFiles.value = []
+  fileNames.value = []
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
 }
 
 // 开始生成测试用例
@@ -570,15 +538,6 @@ const startGeneration = async () => {
     }
     if (uploadedFiles.value.length === 0) {
       ElMessage.warning('请上传至少一个需求文档')
-      return
-    }
-  } else if (inputMode.value === 'feishu') {
-    if (!requirementName.value) {
-      ElMessage.warning('请输入需求名称')
-      return
-    }
-    if (!feishuDocUrl.value) {
-      ElMessage.warning('请输入飞书文档URL')
       return
     }
   }
@@ -640,25 +599,6 @@ const startGeneration = async () => {
       const formData = new FormData()
       formData.append('requirement_name', requirementName.value)
       formData.append('description', requirementDescription.value)
-      if (selectedProjectId.value) {
-        formData.append('project_id', String(selectedProjectId.value))
-      }
-      result = await requirementApi.analyze(formData, modelConfig)
-    } else if (inputMode.value === 'feishu') {
-      ElMessage.info('正在从飞书文档加载内容...')
-      const indexResult = await ragApi.indexFeishu({
-        project_id: selectedProjectId.value || 0,
-        doc_url: feishuDocUrl.value,
-        requirement_name: requirementName.value
-      })
-      if (!indexResult.success) {
-        throw new Error(indexResult.error || '飞书文档索引失败')
-      }
-      ElMessage.success('已从飞书文档加载内容，正在分析...')
-      const formData = new FormData()
-      formData.append('requirement_name', requirementName.value)
-      formData.append('source', 'feishu')
-      formData.append('feishu_url', feishuDocUrl.value)
       if (selectedProjectId.value) {
         formData.append('project_id', String(selectedProjectId.value))
       }
@@ -1129,7 +1069,6 @@ const resetForm = () => {
   requirementDescription.value = ''
   uploadedFiles.value = []
   fileNames.value = []
-  feishuDocUrl.value = ''
   generationComplete.value = false
   isGenerating.value = false
   isInTestcasePhase.value = false  // 重置阶段标记
@@ -1156,7 +1095,7 @@ const exportFunctionPointsToExcel = async () => {
     return
   }
 
-  ElMessage.loading({ message: '正在导出...', duration: 0 })
+  const loading = ElLoading.service({ text: '正在导出...' })
 
   try {
     const XLSX = await import('xlsx')
@@ -1212,9 +1151,11 @@ const exportFunctionPointsToExcel = async () => {
     // 导出
     const fileName = `功能点_${requirementName.value || 'export'}_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
+    loading.close()
     ElMessage.success(`导出成功：${data.length} 个功能点`)
   } catch (error) {
     console.error('导出失败:', error)
+    loading.close()
     ElMessage.error('导出失败')
   }
 }
@@ -1226,7 +1167,7 @@ const exportTestCasesToExcel = async () => {
     return
   }
 
-  ElMessage.loading({ message: '正在导出...', duration: 0 })
+  const loading = ElLoading.service({ text: '正在导出...' })
 
   try {
     const XLSX = await import('xlsx')
@@ -1296,9 +1237,11 @@ const exportTestCasesToExcel = async () => {
     // 导出
     const fileName = `测试用例_${requirementName.value || 'export'}_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
+    loading.close()
     ElMessage.success(`导出成功：${data.length} 个用例`)
   } catch (error) {
     console.error('导出失败:', error)
+    loading.close()
     ElMessage.error('导出失败')
   }
 }
@@ -1310,7 +1253,7 @@ const exportAllToExcel = async () => {
     return
   }
 
-  ElMessage.loading({ message: '正在导出...', duration: 0 })
+  const loading = ElLoading.service({ text: '正在导出...' })
 
   try {
     const XLSX = await import('xlsx')
@@ -1364,9 +1307,11 @@ const exportAllToExcel = async () => {
     // 导出
     const fileName = `AI用例生成_${requirementName.value || 'export'}_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(wb, fileName)
+    loading.close()
     ElMessage.success(`导出成功`)
   } catch (error) {
     console.error('导出失败:', error)
+    loading.close()
     ElMessage.error('导出失败')
   }
 }
@@ -1573,18 +1518,6 @@ const formatDateTime = (timestamp: string): string => {
                 文档上传
               </button>
               <button
-                @click="inputMode = 'feishu'"
-                :class="[
-                  'pb-2 border-b-2 transition-colors flex items-center gap-2',
-                  inputMode === 'feishu'
-                    ? 'border-primary text-primary font-medium'
-                    : 'border-transparent text-text-secondary hover:text-text-primary'
-                ]"
-              >
-                <Link2 class="w-4 h-4" />
-                飞书文档
-              </button>
-              <button
                 @click="inputMode = 'manual'"
                 :class="[
                   'pb-2 border-b-2 transition-colors flex items-center gap-2',
@@ -1637,55 +1570,6 @@ const formatDateTime = (timestamp: string): string => {
             </div>
           </div>
 
-          <!-- 飞书文档模式 -->
-          <div v-else-if="inputMode === 'feishu'" class="space-y-4">
-            <!-- 配置提示 -->
-            <div v-if="!isFeishuConfigured" class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p class="text-yellow-700 text-sm">
-                飞书功能未配置，请联系管理员设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET
-              </p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-text-primary mb-1">
-                需求名称 <span class="text-red-500">*</span>
-              </label>
-              <input
-                v-model="requirementName"
-                type="text"
-                class="input-field"
-                placeholder="例如：用户登录模块需求"
-              />
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-text-primary mb-1">
-                飞书文档链接 <span class="text-red-500">*</span>
-              </label>
-              <input
-                v-model="feishuDocUrl"
-                type="text"
-                class="input-field"
-                placeholder="粘贴飞书文档链接，如：https://my.feishu.cn/wiki/xxx"
-              />
-              <p class="text-xs text-text-placeholder mt-1">
-                支持飞书云文档和知识库文档
-              </p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-text-primary mb-1">
-                选择项目 <span class="text-red-500">*</span>
-              </label>
-              <select v-model="selectedProjectId" class="input-field">
-                <option :value="null">请选择项目（必填）</option>
-                <option v-for="project in projects" :key="project.id" :value="project.id">
-                  {{ project.name }}
-                </option>
-              </select>
-            </div>
-          </div>
-
           <!-- 文档上传模式 -->
           <div v-else class="space-y-4">
             <div>
@@ -1702,10 +1586,10 @@ const formatDateTime = (timestamp: string): string => {
 
             <div
               class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer"
-              @click="$refs.fileInput?.click()"
+              @click="fileInputRef?.click()"
             >
               <input
-                ref="fileInput"
+                ref="fileInputRef"
                 type="file"
                 accept=".txt,.md,.pdf,.docx"
                 multiple

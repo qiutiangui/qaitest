@@ -204,9 +204,16 @@ async def delete_embedding_model(config_id: int):
     return {"message": "删除成功"}
 
 
+@router.post("/{config_id}/test", response_model=dict)
+async def test_embedding_connection_by_id(config_id: int):
+    """通过配置ID测试嵌入模型连接（从数据库获取真实api_key）"""
+    result = await EmbeddingModelService.test_connection_by_id(config_id)
+    return result
+
+
 @router.post("/test", response_model=dict)
 async def test_embedding_connection(test_data: EmbeddingModelTest):
-    """测试嵌入模型连接"""
+    """测试嵌入模型连接（手动传入参数）"""
     # 获取 provider（如果提供了 api_base，可以推断）
     provider = test_data.provider if test_data.provider else "dashscope"
     dimension = test_data.dimension if test_data.dimension else 1024

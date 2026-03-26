@@ -213,6 +213,11 @@ export const modelConfigApi = {
     return api.post<{ success: boolean; message: string }>('/v1/embedding-models/test', data)
   },
 
+  // 通过ID测试嵌入连接（从数据库获取真实api_key）
+  testEmbeddingConnectionById: (id: number) => {
+    return api.post<{ success: boolean; message: string }>(`/v1/embedding-models/${id}/test`)
+  },
+
   setDefaultEmbeddingModel: (name: string) => {
     return api.put<{ message: string; name: string }>(`/v1/embedding-models/default/${name}`)
   },

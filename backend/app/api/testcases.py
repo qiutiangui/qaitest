@@ -50,12 +50,19 @@ async def list_testcases(
     # 为每个测试用例添加requirement_name
     result_items = []
     for item in items:
+        # 获取功能点名称
+        requirement_name = None
+        if item.requirement_id:
+            requirement = await Requirement.get_or_none(id=item.requirement_id)
+            if requirement:
+                requirement_name = requirement.name
+        
         # 构建响应数据
         item_data = {
             "id": item.id,
             "project_id": item.project_id,
             "requirement_id": item.requirement_id,
-            "requirement_name": item.requirement.requirement_name if hasattr(item, 'requirement') and item.requirement else None,
+            "requirement_name": requirement_name,
             "version_id": item.version_id,
             "title": item.title,
             "description": item.description,
@@ -64,7 +71,7 @@ async def list_testcases(
             "test_type": item.test_type,
             "preconditions": item.preconditions,
             "test_data": item.test_data,
-            "creator": item.creator,
+            "creator": item.creator or "AI",
             "created_at": item.created_at,
             "steps": list(item.steps) if item.steps else []
         }
@@ -100,12 +107,19 @@ async def get_testcase(testcase_id: int):
     if not testcase:
         raise HTTPException(status_code=404, detail="测试用例不存在")
     
+    # 获取功能点名称
+    requirement_name = None
+    if testcase.requirement_id:
+        requirement = await Requirement.get_or_none(id=testcase.requirement_id)
+        if requirement:
+            requirement_name = requirement.name
+    
     # 构建响应数据
     testcase_data = {
         "id": testcase.id,
         "project_id": testcase.project_id,
         "requirement_id": testcase.requirement_id,
-        "requirement_name": testcase.requirement.requirement_name if hasattr(testcase, 'requirement') and testcase.requirement else None,
+        "requirement_name": requirement_name,
         "version_id": testcase.version_id,
         "title": testcase.title,
         "description": testcase.description,
@@ -114,7 +128,7 @@ async def get_testcase(testcase_id: int):
         "test_type": testcase.test_type,
         "preconditions": testcase.preconditions,
         "test_data": testcase.test_data,
-        "creator": testcase.creator,
+        "creator": testcase.creator or "AI",
         "created_at": testcase.created_at,
         "steps": list(testcase.steps) if testcase.steps else []
     }
@@ -156,11 +170,25 @@ async def get_testcases_by_ids(ids: list[int] = Body(..., embed=True)):
         steps = await TestStep.filter(test_case_id=tc.id).order_by("step_number")
         step_responses = [TestStepResponse.model_validate(s) for s in steps]
 
-        # 先将 steps 设为空列表，避免 Pydantic 验证失败
-        tc.steps = []
-        response_data = TestCaseResponse.model_validate(tc)
-        response_data.requirement_name = requirement_name
-        response_data.steps = step_responses
+        # 创建响应数据（直接从模型数据构建，不修改原始模型）
+        response_data = TestCaseResponse(
+            id=tc.id,
+            title=tc.title,
+            description=tc.description,
+            priority=tc.priority,
+            status=tc.status,
+            precondition=tc.precondition,
+            expectation=tc.expectation,
+            test_type=tc.test_type,
+            requirement_id=tc.requirement_id,
+            function_point_id=tc.function_point_id,
+            task_id=tc.task_id,
+            project_id=tc.project_id,
+            created_at=tc.created_at,
+            updated_at=tc.updated_at,
+            requirement_name=requirement_name,
+            steps=step_responses
+        )
         result.append(response_data)
 
     return result

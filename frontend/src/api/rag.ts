@@ -122,51 +122,6 @@ export function searchSimilar(data: {
   return api.post<RAGSearchResult>('/rag/search', formData)
 }
 
-/**
- * 获取飞书配置状态
- */
-export function getFeishuConfig() {
-  return api.get<{
-    configured: boolean
-    app_id: string | null
-    message: string
-  }>('/rag/feishu/config')
-}
-
-/**
- * 索引飞书文档
- */
-export function indexFeishu(data: {
-  project_id: number
-  version_id?: number
-  doc_url: string
-  requirement_name?: string
-  chunk_size?: number
-  overlap?: number
-}) {
-  const formData = new FormData()
-  formData.append('project_id', String(data.project_id))
-  if (data.version_id) {
-    formData.append('version_id', String(data.version_id))
-  }
-  formData.append('doc_url', data.doc_url)
-  if (data.requirement_name) {
-    formData.append('requirement_name', data.requirement_name)
-  }
-  if (data.chunk_size) {
-    formData.append('chunk_size', String(data.chunk_size))
-  }
-  if (data.overlap) {
-    formData.append('overlap', String(data.overlap))
-  }
-
-  return api.post<RAGIndexResult>('/rag/index/feishu', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
-}
-
 export default {
   getRAGStats,
   indexDocument,
@@ -174,6 +129,4 @@ export default {
   deleteRAGByVersion,
   deleteRAGByRequirement,
   searchSimilar,
-  getFeishuConfig,
-  indexFeishu
 }

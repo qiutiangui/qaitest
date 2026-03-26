@@ -257,8 +257,6 @@ async def analyze_requirements(
     requirement_name: Optional[str] = Form(None, description="需求名称"),
     description: str = Form("", description="需求描述"),
     file: Optional[UploadFile] = File(None, description="需求文档文件"),
-    source: Optional[str] = Form(None, description="来源：feishu 表示从飞书文档导入"),
-    feishu_url: Optional[str] = Form(None, description="飞书文档URL（source=feishu时使用）"),
     llm_config_json: Optional[str] = Form(None, alias="llm_config", description="模型配置JSON字符串"),
 ):
     """
@@ -314,7 +312,7 @@ async def analyze_requirements(
         task_name=requirement_name,
         status="pending",
         progress=0,
-        input_source="file" if file else ("feishu" if source == 'feishu' else "description"),
+        input_source="file" if file else "description",
     )
 
     # 读取文件内容
@@ -329,25 +327,6 @@ async def analyze_requirements(
         except Exception as e:
             logger.error(f"文件读取失败: {e}")
             raise HTTPException(status_code=400, detail=f"文件读取失败: {str(e)}")
-
-    # 如果是飞书来源，从 RAG 检索内容
-    if source == 'feishu' and feishu_url:
-        try:
-            from app.rag.readers import FeishuReader
-            from app.config import settings
-
-            app_id = getattr(settings, 'feishu_app_id', None)
-            app_secret = getattr(settings, 'feishu_app_secret', None)
-
-            if app_id and app_secret:
-                reader = FeishuReader(app_id=app_id, app_secret=app_secret)
-                docs = await reader.load_data_from_url(feishu_url)
-                if docs:
-                    document_content = docs[0].text
-                    logger.info(f"从飞书文档加载内容成功，长度: {len(document_content)}")
-        except Exception as e:
-            logger.error(f"从飞书读取内容失败: {e}")
-            # 继续使用空内容，让 AI 基于需求名称分析
 
     # 后台启动分析任务
     async def run_analysis():

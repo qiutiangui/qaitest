@@ -117,7 +117,8 @@ class EmbeddingModelService:
             update_data["provider"] = provider
         if api_base is not None:
             update_data["api_base"] = api_base
-        if api_key is not None:
+        # 忽略 "****" 遮蔽值，只有非遮蔽值才更新
+        if api_key is not None and api_key != "****":
             update_data["api_key"] = api_key
         if model_name is not None:
             update_data["model_name"] = model_name
@@ -218,6 +219,58 @@ class EmbeddingModelService:
                     model_name=model_name,
                     api_base=api_base,
                     dimension=dimension,
+                )
+
+            # 测试嵌入
+            test_text = "测试连接"
+            embedding = await embedding_model._get_embedding(test_text)
+
+            return {
+                "success": True,
+                "message": "连接成功",
+                "embedding_dim": len(embedding) if embedding else 0,
+            }
+        except Exception as e:
+            logger.error(f"嵌入模型连接测试失败: {e}")
+            return {
+                "success": False,
+                "message": f"连接失败: {str(e)}",
+            }
+
+    @staticmethod
+    async def test_connection_by_id(
+        config_id: int,
+    ) -> Dict[str, Any]:
+        """通过配置ID测试嵌入模型连接（从数据库获取真实api_key）"""
+        try:
+            from app.rag.llama_embeddings import QwenEmbeddingModel, OllamaEmbeddingModel
+
+            # 从数据库获取配置
+            config = await EmbeddingModelConfig.get_or_none(id=config_id)
+            if not config:
+                return {
+                    "success": False,
+                    "message": "配置不存在",
+                }
+
+            # 根据 provider 选择不同的嵌入模型
+            if config.provider == "ollama":
+                embedding_model = OllamaEmbeddingModel(
+                    model_name=config.model_name,
+                    api_base=config.api_base,
+                    dimension=config.dimension,
+                )
+            else:
+                if not config.api_key:
+                    return {
+                        "success": False,
+                        "message": "API Key 未配置",
+                    }
+                embedding_model = QwenEmbeddingModel(
+                    api_key=config.api_key,
+                    model_name=config.model_name,
+                    api_base=config.api_base,
+                    dimension=config.dimension,
                 )
 
             # 测试嵌入

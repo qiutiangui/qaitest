@@ -48,18 +48,12 @@ const dialogTestResult = ref<{ success: boolean; message: string } | null>(null)
 
 // 提供商选项
 const llmProviders = [
-  { value: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner'] },
-  { value: 'moonshot', label: 'Moonshot (Kimi)', baseUrl: 'https://api.moonshot.cn/v1', models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'] },
-  { value: 'qwen', label: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-turbo', 'qwen-plus', 'qwen-max'] },
-  { value: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'] },
-  { value: 'anthropic', label: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'] },
   { value: 'ollama', label: 'Ollama (本地)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'llama3.1', 'mistral', 'phi3', 'qwen2.5:7b', 'qwen2.5:14b', 'qwen2.5:32b', 'codellama:7b', 'codellama:13b'] },
   { value: 'custom', label: '自定义', baseUrl: '', models: [] },
 ]
 
 const embeddingProviders = [
   { value: 'dashscope', label: '阿里云 DashScope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['text-embedding-v3', 'text-embedding-v2'], dimensions: [1024, 1536] },
-  { value: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['text-embedding-3-small', 'text-embedding-3-large'], dimensions: [1536, 3072] },
   { value: 'ollama', label: 'Ollama (本地)', baseUrl: 'http://localhost:11434', models: ['nomic-embed-text', 'mxbai-embed-large'], dimensions: [768, 1024] },
 ]
 
@@ -197,8 +191,8 @@ const openLLMDialog = (model?: LLMModel) => {
     editingLLMId.value = null
     llmForm.value = {
       display_name: '',
-      provider: 'deepseek',
-      base_url: 'https://api.deepseek.com/v1',
+      provider: 'custom',
+      base_url: '',
       api_key: '',
       default_model: '',
       description: '',
@@ -377,17 +371,12 @@ const deleteEmbedding = async (model: EmbeddingModel) => {
   }
 }
 
-// 测试嵌入连接
+// 测试嵌入连接（通过ID从数据库获取真实api_key）
 const testEmbedding = async (model: EmbeddingModel) => {
   testingEmbeddingId.value = model.id
   try {
-    const res = await modelConfigApi.testEmbeddingConnection({
-      api_base: model.api_base,
-      api_key: model.api_key || '',
-      model_name: model.model_name,
-      provider: model.provider,
-      dimension: model.dimension,
-    })
+    // 直接通过ID调用，后端从数据库获取真实api_key
+    const res = await modelConfigApi.testEmbeddingConnectionById(model.id)
     if (res.success) {
       ElMessage.success('连接成功！')
     } else {

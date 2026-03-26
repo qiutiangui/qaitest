@@ -699,6 +699,7 @@ watch(selectedProject, () => {
           <!-- 验收标准 -->
           <DetailCard title="验收标准" :icon="CheckCircle">
             <EditableField
+              label="验收标准"
               :model-value="detailRequirement.acceptance_criteria"
               :editable="false"
               type="textarea"
@@ -810,6 +811,7 @@ watch(selectedProject, () => {
           <!-- 验收标准 -->
           <DetailCard title="验收标准" :icon="CheckCircle">
             <EditableField
+              label="验收标准"
               v-model="formData.acceptance_criteria"
               editable
               type="textarea"
@@ -821,6 +823,7 @@ watch(selectedProject, () => {
           <!-- 关键词 -->
           <DetailCard title="关键词" :icon="Tag">
             <EditableField
+              label="关键词"
               v-model="formData.keywords"
               editable
               placeholder="多个关键词用逗号分隔"

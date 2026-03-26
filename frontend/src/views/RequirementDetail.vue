@@ -2,11 +2,13 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Edit, Delete, Save, X, FileText, CheckSquare } from 'lucide-vue-next'
+import { Edit, Delete, Save, X, FileText, CheckSquare, ArrowRight } from 'lucide-vue-next'
 import useRequirementStore from '@/stores/requirement'
 import useProjectStore from '@/stores/project'
 import useVersionStore from '@/stores/version'
 import type { RequirementUpdate } from '@/types/requirement'
+import { testcaseApi } from '@/api/testcase'
+import type { TestCase, TestCaseListResponse } from '@/types/testcase'
 import DetailHeader from '@/components/detail/DetailHeader.vue'
 import DetailCard from '@/components/detail/DetailCard.vue'
 import EditableField from '@/components/detail/EditableField.vue'
@@ -21,6 +23,9 @@ const versionStore = useVersionStore()
 const loading = ref(true)
 const isEditing = ref(false)
 const formData = ref<RequirementUpdate>({})
+const relatedTestCases = ref<TestCase[]>([])
+const testCasesLoading = ref(false)
+const testCasesTotal = ref(0)
 
 // 当前功能点
 const requirement = computed(() => requirementStore.currentRequirement)
@@ -55,6 +60,7 @@ async function loadData() {
     await requirementStore.fetchRequirement(id)
     await projectStore.fetchProjects({ page_size: 100 })
     await versionStore.fetchVersions({ page_size: 100 })
+    await fetchRelatedTestCases()
   } catch {
     ElMessage.error('加载功能点失败')
     router.push('/requirements')
@@ -138,6 +144,43 @@ function getPriorityClass(priority: string | null) {
     case '高': return 'bg-red-100 text-red-700'
     case '中': return 'bg-orange-100 text-orange-700'
     case '低': return 'bg-green-100 text-green-700'
+    default: return 'bg-gray-100 text-gray-700'
+  }
+}
+
+// 获取关联的测试用例
+async function fetchRelatedTestCases() {
+  if (!requirement.value?.id) return
+  
+  testCasesLoading.value = true
+  try {
+    const res: TestCaseListResponse = await testcaseApi.list({
+      requirement_id: requirement.value.id,
+      page_size: 100
+    })
+    relatedTestCases.value = res.items
+    testCasesTotal.value = res.total
+  } catch {
+    // 静默处理
+  } finally {
+    testCasesLoading.value = false
+  }
+}
+
+// 跳转到测试用例详情
+function goToTestCase(testcase: TestCase) {
+  router.push(`/testcases/${testcase.id}`)
+}
+
+// 获取状态样式
+function getStatusClass(status: string | null) {
+  if (!status) return 'bg-gray-100 text-gray-700'
+  switch (status) {
+    case '已通过': return 'bg-green-100 text-green-700'
+    case '未通过': return 'bg-red-100 text-red-700'
+    case '待执行': return 'bg-yellow-100 text-yellow-700'
+    case '执行中': return 'bg-blue-100 text-blue-700'
+    case '未开始': return 'bg-gray-100 text-gray-700'
     default: return 'bg-gray-100 text-gray-700'
   }
 }
@@ -280,9 +323,54 @@ onMounted(() => {
 
       <!-- 关联测试用例 -->
       <DetailCard title="关联测试用例" :icon="CheckSquare">
-        <div class="text-center py-12">
+        <!-- 加载状态 -->
+        <div v-if="testCasesLoading" class="text-center py-12">
+          <div class="inline-flex items-center gap-2 text-text-secondary">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
+            <span>加载测试用例...</span>
+          </div>
+        </div>
+        
+        <!-- 空状态 -->
+        <div v-else-if="relatedTestCases.length === 0" class="text-center py-12">
           <CheckSquare class="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p class="text-text-secondary">暂无关联的测试用例</p>
+          <p class="text-text-secondary mb-4">暂无关联的测试用例</p>
+        </div>
+        
+        <!-- 测试用例列表 -->
+        <div v-else class="space-y-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-text-secondary">共 {{ testCasesTotal }} 个测试用例</span>
+          </div>
+          <div 
+            v-for="testcase in relatedTestCases" 
+            :key="testcase.id"
+            class="p-4 border border-gray-200 rounded-lg hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all group"
+            @click="goToTestCase(testcase)"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <h4 class="font-medium text-gray-900 truncate">{{ testcase.title }}</h4>
+                </div>
+                <div class="flex items-center gap-3 text-sm text-text-secondary">
+                  <span v-if="testcase.test_type" class="px-2 py-0.5 bg-gray-100 rounded text-xs">
+                    {{ testcase.test_type }}
+                  </span>
+                  <span v-if="testcase.priority" class="px-2 py-0.5 rounded text-xs" :class="getPriorityClass(testcase.priority)">
+                    {{ testcase.priority }}
+                  </span>
+                  <span class="px-2 py-0.5 rounded text-xs" :class="getStatusClass(testcase.status)">
+                    {{ testcase.status || '未开始' }}
+                  </span>
+                  <span v-if="testcase.creator" class="text-xs">
+                    创建者: {{ testcase.creator }}
+                  </span>
+                </div>
+              </div>
+              <ArrowRight class="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors" />
+            </div>
+          </div>
         </div>
       </DetailCard>
     </div>

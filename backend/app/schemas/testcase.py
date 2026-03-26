@@ -67,7 +67,7 @@ class TestCaseResponse(TestCaseBase):
     requirement_id: Optional[int]
     requirement_name: Optional[str] = Field(None, description="需求名称")
     version_id: Optional[int]
-    creator: str
+    creator: Optional[str] = Field(None, description="创建者")
     created_at: datetime
     steps: Optional[List[TestStepResponse]] = None
     
