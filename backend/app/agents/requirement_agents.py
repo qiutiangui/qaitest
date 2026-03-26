@@ -14,6 +14,26 @@ import re
 import asyncio
 from datetime import datetime
 
+
+def clean_json_content(content: str) -> str:
+    """
+    清理内容中的特殊字符，确保JSON解析正确
+    修复 LLM 输出中可能包含的特殊引号等问题
+    """
+    if not content:
+        return content
+    
+    # 替换中文引号为英文引号
+    content = content.replace('"', '"').replace('"', '"')
+    # 替换中文冒号
+    content = content.replace('：', ':')
+    # 替换中文逗号
+    content = content.replace('，', ',')
+    # 替换中文括号
+    content = content.replace('（', '(').replace('）', ')')
+    
+    return content
+
 from autogen_core import (
     RoutedAgent, 
     type_subscription,
@@ -74,6 +94,12 @@ async def _persist_log(task_id: str, agent_name: str, content: str, message_type
             
         from app.models import AITestTask
         from datetime import datetime
+        from app.database import ensure_db_connection
+
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            logger.warning(f"数据库连接不可用，跳过日志持久化: task_id={task_id}")
+            return
 
         # 映射消息类型到日志级别
         level_map = {
@@ -112,6 +138,12 @@ async def update_task_progress(task_id: str, phase_code: str, phase_name: str, p
     try:
         from app.models import AITestTask
         from datetime import datetime
+        from app.database import ensure_db_connection
+
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            logger.warning(f"数据库连接不可用，跳过进度更新: task_id={task_id}")
+            return
 
         # 查找任务
         task = await AITestTask.filter(task_id=task_id).first()
@@ -459,6 +491,7 @@ class RequirementAcquireAgent(RoutedAgent):
             
             # RAG 索引步骤
             chunk_count = 0
+            rag_index_result = None
             if message.document_content or message.description:
                 try:
                     await push_log(task_id, "RAGIndexAgent", "⏳ 正在创建文档向量索引...", "thinking")
@@ -467,6 +500,8 @@ class RequirementAcquireAgent(RoutedAgent):
                     index_manager = await get_index_manager()
                     
                     rag_content = message.document_content if message.document_content else message.description
+                    logger.info(f"[RAG索引] 开始索引, content长度={len(rag_content)}, project_id={message.project_id}")
+                    
                     index_result = await index_manager.index_requirement_document(
                         project_id=message.project_id,
                         task_id=task_id,
@@ -477,6 +512,9 @@ class RequirementAcquireAgent(RoutedAgent):
                         chunk_size=500,
                         overlap=100
                     )
+                    
+                    rag_index_result = index_result
+                    logger.info(f"[RAG索引] 结果: {index_result}")
                     
                     if index_result.get("success"):
                         chunk_count = index_result.get('indexed', 0)
@@ -494,8 +532,12 @@ class RequirementAcquireAgent(RoutedAgent):
                             "thinking"
                         )
                 except Exception as e:
-                    logger.warning(f"RAG索引失败（不影响需求分析）: {e}")
+                    logger.error(f"RAG索引失败（不影响需求分析）: {e}")
+                    import traceback
+                    logger.error(f"RAG索引详细错误: {traceback.format_exc()}")
                     await push_log(task_id, "RAGIndexAgent", f"⚠️ RAG索引失败：{e}", "thinking")
+            else:
+                logger.info(f"[RAG索引] 跳过，文档内容和描述都为空")
             
             # 统计信息
             doc_length = len(message.document_content) if message.document_content else 0
@@ -901,6 +943,9 @@ class RequirementOutputAgent(RoutedAgent):
         Parse requirements JSON - multiple strategies
         """
         requirements = []
+        
+        # 先清理特殊字符
+        content = clean_json_content(content)
         
         # 策略1: 标准JSON解析
         try:

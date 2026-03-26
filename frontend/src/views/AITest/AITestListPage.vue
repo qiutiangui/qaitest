@@ -490,32 +490,21 @@ watch([filterStatus], () => {
         @click="viewDetail(task)"
         class="bg-white rounded-xl border border-gray-200 p-5 hover:border-primary/30 hover:shadow-md transition-all cursor-pointer group"
       >
-        <div class="flex items-start gap-4">
+        <!-- 第一行：状态图标 + 任务信息 + 操作按钮 -->
+        <div class="flex items-center gap-4">
           <!-- 状态指示器 -->
-          <div class="relative">
+          <div class="shrink-0">
             <div :class="['w-12 h-12 rounded-xl flex items-center justify-center', statusConfig[task.status].class]">
               <component 
                 :is="statusConfig[task.status].icon" 
                 :class="['w-6 h-6', task.status === 'running' && 'animate-spin']" 
               />
             </div>
-            <!-- 进度环 -->
-            <svg v-if="task.status === 'running' || task.status === 'completed'" class="absolute -bottom-1 -right-1 w-6 h-6 -rotate-90">
-              <circle cx="12" cy="12" r="10" fill="white" stroke="#e5e7eb" stroke-width="2"/>
-              <circle 
-                cx="12" cy="12" r="10" 
-                fill="none" 
-                stroke="#3b82f6" 
-                stroke-width="2"
-                stroke-linecap="round"
-                :stroke-dasharray="`${task.progress * 0.628} 62.8`"
-              />
-            </svg>
           </div>
           
           <!-- 任务信息 -->
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-3 mb-2">
+            <div class="flex items-center gap-3 flex-wrap">
               <!-- 任务类型标签 -->
               <span class="px-2.5 py-1 rounded-lg text-xs font-medium bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700">
                 AI测试
@@ -531,7 +520,7 @@ watch([filterStatus], () => {
             </div>
             
             <!-- 底部信息 -->
-            <div class="flex items-center gap-4 text-sm text-gray-400">
+            <div class="flex items-center gap-4 text-sm text-gray-400 mt-1">
               <span>{{ formatDateTime(task.created_at) }}</span>
               <span v-if="task.status === 'failed' && task.error_message" class="text-red-500 truncate max-w-xs">
                 {{ task.error_message }}
@@ -539,28 +528,14 @@ watch([filterStatus], () => {
             </div>
           </div>
           
-          <!-- 进度条 -->
-          <div class="w-32 shrink-0">
-            <div v-if="task.status === 'running' || task.status === 'completed'" class="space-y-1">
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-gray-500">进度</span>
-                <span class="font-medium text-gray-700">{{ task.progress }}%</span>
-              </div>
-              <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div 
-                  class="h-full bg-primary rounded-full transition-all duration-500"
-                  :style="{ width: `${task.progress}%` }"
-                ></div>
-              </div>
-            </div>
-            
-            <div v-else :class="['text-sm font-medium px-3 py-1.5 rounded-lg text-center', statusConfig[task.status].class]">
-              {{ statusConfig[task.status].text }}
-            </div>
+          <!-- 非进行中状态 -->
+          <div v-if="task.status !== 'running' && task.status !== 'completed'" 
+               :class="['shrink-0 text-sm font-medium px-3 py-1.5 rounded-lg', statusConfig[task.status].class]">
+            {{ statusConfig[task.status].text }}
           </div>
           
-          <!-- 操作 -->
-          <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <!-- 操作按钮（始终显示，不再 hover 显示） -->
+          <div class="flex items-center gap-1 shrink-0">
             <button
               @click="viewDetail(task)"
               class="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
@@ -587,6 +562,29 @@ watch([filterStatus], () => {
             >
               <Trash2 :class="['w-5 h-5', deletingId === task.task_id && 'animate-pulse']" />
             </button>
+          </div>
+        </div>
+        
+        <!-- 进度条（仅 running/completed 显示） -->
+        <div v-if="task.status === 'running' || task.status === 'completed'" class="mt-4 pt-4 border-t border-gray-100">
+          <div class="flex items-center gap-3">
+            <!-- 百分比进度条 -->
+            <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div 
+                :class="[
+                  'h-full rounded-full transition-all duration-500',
+                  task.status === 'completed' ? 'bg-green-500' : 'bg-gradient-to-r from-primary to-purple-500'
+                ]"
+                :style="{ width: `${task.progress}%` }"
+              ></div>
+            </div>
+            
+            <!-- 进度信息 -->
+            <div class="shrink-0">
+              <span :class="['text-sm font-medium', task.status === 'completed' ? 'text-green-500' : 'text-blue-500']">
+                {{ task.progress }}%
+              </span>
+            </div>
           </div>
         </div>
       </div>

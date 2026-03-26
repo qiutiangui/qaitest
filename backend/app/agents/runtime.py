@@ -413,6 +413,7 @@ async def get_model_clients(
     
     # 需求分析模型
     if requirement_analyze_config:
+        logger.info(f"[get_model_clients] 使用传入配置创建需求分析客户端: provider={requirement_analyze_config.provider}, model={requirement_analyze_config.model}")
         requirement_analyze_client = await create_client_async(requirement_analyze_config)
     else:
         # 从数据库获取默认模型配置（按用途获取）
@@ -431,6 +432,7 @@ async def get_model_clients(
 
     # 用例生成模型
     if testcase_generate_config:
+        logger.info(f"[get_model_clients] 使用传入配置创建生成客户端: provider={testcase_generate_config.provider}, model={testcase_generate_config.model}")
         testcase_generate_client = await create_client_async(testcase_generate_config)
     else:
         # 从数据库获取默认模型配置（按用途获取）
@@ -449,6 +451,7 @@ async def get_model_clients(
 
     # 用例评审模型
     if testcase_review_config:
+        logger.info(f"[get_model_clients] 使用传入配置创建评审客户端: provider={testcase_review_config.provider}, model={testcase_review_config.model}")
         testcase_review_client = await create_client_async(testcase_review_config)
     else:
         # 从数据库获取默认模型配置（按用途获取）

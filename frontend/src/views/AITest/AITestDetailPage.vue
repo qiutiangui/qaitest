@@ -90,8 +90,8 @@ const agentCodeMap: Record<string, string> = {
   '用例保存': '用例保存',
 }
 
-// Agent 配置
-const agentConfig: Record<string, { color: string; bgColor: string; borderColor: string }> = {
+// Agent 样式配置
+const agentStyleConfig: Record<string, { color: string; bgColor: string; borderColor: string }> = {
   '系统': { color: 'text-gray-600', bgColor: 'bg-gray-50', borderColor: 'border-gray-300' },
   '需求获取': { color: 'text-purple-600', bgColor: 'bg-purple-50', borderColor: 'border-purple-300' },
   '需求分析': { color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-300' },
@@ -172,7 +172,7 @@ const loadTaskDetail = async () => {
     if (data.logs && data.logs.length > 0) {
       logs.value = data.logs.map((log: any, idx: number) => ({
         id: `hist-${idx}`,
-        agent_name: getAgentDisplayName(log.agent_name || log.agent || '系统'),
+        agent_name: agentCodeMap[log.agent_name] || log.agent_name || log.agent || '系统',
         content: log.content,
         type: mapLogType(log.type || log.level || 'info'),
         timestamp: log.timestamp || log.created_at || new Date().toISOString(),
@@ -226,16 +226,11 @@ const mapLogType = (type: string): LogType => {
 
 // 获取Agent样式
 const getAgentClass = (agentName: string) => {
-  const config = agentConfig[agentName]
+  const config = agentStyleConfig[agentName]
   if (config) {
     return `${config.color} ${config.bgColor} ${config.borderColor}`
   }
   return 'text-gray-600 bg-gray-50 border-gray-300'
-}
-
-// 获取Agent显示名称
-const getAgentDisplayName = (agentCode: string) => {
-  return agentCodeMap[agentCode] || agentCode || '系统'
 }
 
 // 获取阶段样式
@@ -281,6 +276,28 @@ const formatDuration = (seconds: number | undefined) => {
   const hours = Math.floor(mins / 60)
   return `${hours}时${mins % 60}分`
 }
+
+// 计算执行耗时
+const executionDuration = computed(() => {
+  if (!taskDetail.value) return '-'
+  const { started_at, completed_at } = taskDetail.value
+
+  // 如果有完成时间，计算到完成时间
+  if (completed_at) {
+    const start = new Date(started_at).getTime()
+    const end = new Date(completed_at).getTime()
+    return formatDuration(Math.round((end - start) / 1000))
+  }
+
+  // 如果任务正在运行，计算到现在
+  if (started_at && taskDetail.value.status === 'running') {
+    const start = new Date(started_at).getTime()
+    const now = Date.now()
+    return formatDuration(Math.round((now - start) / 1000)) + ' (进行中)'
+  }
+
+  return '-'
+})
 
 // 复制日志内容
 const copyLog = async (log: LogEntry) => {
@@ -335,28 +352,45 @@ const connectToWebSocket = () => {
 
 // 处理WebSocket消息
 const handleWebSocketMessage = (message: any) => {
-  const { agent_name, content, type, extra_data } = message
-  
+  const { agent, agent_code, type, content, data } = message
+
+  // 解析 [PROGRESS] 标签
+  if (content) {
+    const progressMatch = content.match(/\[PROGRESS\](\d+)\[\/PROGRESS\]/)
+    if (progressMatch) {
+      const progress = parseInt(progressMatch[1], 10)
+      if (taskDetail.value) {
+        taskDetail.value.progress = progress
+      }
+    }
+  }
+
   // 更新任务状态
   if (message.status) {
     taskDetail.value = {
       ...taskDetail.value!,
       status: message.status,
-      progress: Number(message.progress) ?? taskDetail.value?.progress ?? 0,
+      progress: Number(message.progress ?? data?.progress) ?? taskDetail.value?.progress ?? 0,
       current_phase: message.current_phase ?? taskDetail.value?.current_phase
     }
   }
-  
+
   // 更新进度
-  if (message.progress !== undefined) {
-    taskDetail.value!.progress = Number(message.progress)
+  if (data?.progress !== undefined) {
+    if (taskDetail.value) {
+      taskDetail.value.progress = Number(data.progress)
+    }
+  } else if (message.progress !== undefined) {
+    if (taskDetail.value) {
+      taskDetail.value.progress = Number(message.progress)
+    }
   }
-  
+
   // 获取 agent 显示名称
-  const displayAgent = getAgentDisplayName(agent_name)
-  
+  const displayAgent = agentCodeMap[agent] || agent || '系统'
+
   // 流式内容 - 合并到当前 agent 的日志
-  if (type === 'stream') {
+  if (type === 'stream' || type === 'streaming') {
     const lastLog = logs.value[logs.value.length - 1]
     if (lastLog && lastLog.agent_name === displayAgent && lastLog.type === 'stream') {
       lastLog.content += content
@@ -371,7 +405,7 @@ const handleWebSocketMessage = (message: any) => {
       content: content || '',
       type: 'stream',
       timestamp: new Date().toISOString(),
-      extra_data
+      extra_data: data
     })
     lastLogIndex.value++
     if (autoScroll.value) {
@@ -379,7 +413,7 @@ const handleWebSocketMessage = (message: any) => {
     }
     return
   }
-  
+
   // 流式结束或完成
   if (type === 'stream_end' || type === 'complete') {
     const lastLog = logs.value[logs.value.length - 1]
@@ -388,7 +422,7 @@ const handleWebSocketMessage = (message: any) => {
     }
     return
   }
-  
+
   // 非流式消息 - 添加新日志
   logs.value.push({
     id: `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -396,7 +430,7 @@ const handleWebSocketMessage = (message: any) => {
     content: content || '',
     type: mapLogType(type || 'info'),
     timestamp: new Date().toISOString(),
-    extra_data
+    extra_data: data
   })
   lastLogIndex.value++
   
@@ -635,7 +669,7 @@ watch(() => taskDetail.value?.status, (newStatus) => {
       <div v-if="activeTab === 'overview'" class="space-y-6">
         <!-- 整体进度卡片 -->
         <div class="bg-white rounded-xl border border-gray-200 p-6">
-          <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-medium text-gray-700 flex items-center gap-2">
               <Zap class="w-4 h-4" />
               执行进度
@@ -653,8 +687,10 @@ watch(() => taskDetail.value?.status, (newStatus) => {
                  taskDetail.status === 'pending' ? '排队中' : taskDetail.status }}
             </span>
           </div>
+          
+          <!-- 百分比进度条 -->
           <div class="flex items-center gap-3">
-            <div class="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+            <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
               <div 
                 :class="[
                   'h-full rounded-full transition-all duration-500',
@@ -702,7 +738,7 @@ watch(() => taskDetail.value?.status, (newStatus) => {
               </div>
               <div>
                 <p class="text-sm text-gray-500">执行耗时</p>
-                <p class="text-xl font-bold text-gray-900">-</p>
+                <p class="text-xl font-bold text-gray-900">{{ executionDuration }}</p>
               </div>
             </div>
           </div>

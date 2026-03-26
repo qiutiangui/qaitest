@@ -62,8 +62,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # 关闭时清理
+    # 关闭时清理 - 等待所有运行中的任务完成后再关闭数据库连接
     logger.info("qaitest智测平台关闭中...")
+    
+    # 等待一段时间让正在运行的任务完成
+    # Runtime模式的AI任务可能需要更多时间完成
+    await asyncio.sleep(2)
+    
     await close_db()
     logger.info("qaitest智测平台已关闭")
 

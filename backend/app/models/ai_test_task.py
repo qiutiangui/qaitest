@@ -95,6 +95,14 @@ class AITestTask(models.Model):
 
     async def add_log(self, agent: str, agent_name: str, content: str, level: str = "info", log_type: str = "info"):
         """添加日志条目"""
+        from app.database import ensure_db_connection
+        
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            import logging
+            logging.warning(f"数据库连接不可用，跳过日志添加: task_id={self.task_id}")
+            return
+        
         if self.logs is None:
             self.logs = []
 
@@ -115,6 +123,14 @@ class AITestTask(models.Model):
 
     async def update_phase(self, phase_code: str, phase_name: str, status: str = "running"):
         """更新当前阶段"""
+        from app.database import ensure_db_connection
+        
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            import logging
+            logging.warning(f"数据库连接不可用，跳过阶段更新: task_id={self.task_id}")
+            return
+        
         self.current_phase = phase_name
         self.current_phase_code = phase_code
 
@@ -148,6 +164,14 @@ class AITestTask(models.Model):
     async def update_requirement_progress(self, status: str = "running", progress: int = 0, 
                                           saved_count: int = 0, saved_ids: list = None):
         """更新需求分析阶段进度"""
+        from app.database import ensure_db_connection
+        
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            import logging
+            logging.warning(f"数据库连接不可用，跳过需求进度更新: task_id={self.task_id}")
+            return
+        
         self.requirement_phase_status = status
         self.requirement_phase_progress = progress
         self.saved_requirements = saved_count
@@ -174,6 +198,14 @@ class AITestTask(models.Model):
     async def update_testcase_progress(self, status: str = "running", progress: int = 0,
                                        saved_count: int = 0, saved_ids: list = None):
         """更新用例生成阶段进度"""
+        from app.database import ensure_db_connection
+        
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            import logging
+            logging.warning(f"数据库连接不可用，跳过用例进度更新: task_id={self.task_id}")
+            return
+        
         self.testcase_phase_status = status
         self.testcase_phase_progress = progress
         self.saved_testcases = saved_count
@@ -189,9 +221,45 @@ class AITestTask(models.Model):
             self.status = "running"
         
         await self.save()
+        
+        # 推送 WebSocket 消息，通知前端进度更新
+        try:
+            from app.api.websocket import push_agent_message
+            import asyncio
+            # 尝试在当前事件循环中推送，如果失败则记录日志
+            try:
+                loop = asyncio.get_running_loop()
+                # 如果有正在运行的事件循环，在其中推送
+                loop.create_task(push_agent_message(
+                    self.task_id,
+                    "System",
+                    f"[PROGRESS]{self.progress}[/PROGRESS]",
+                    "progress",
+                    {"phase": "testcase", "progress": self.progress}
+                ))
+            except RuntimeError:
+                # 没有正在运行的事件循环，同步调用
+                asyncio.run(push_agent_message(
+                    self.task_id,
+                    "System",
+                    f"[PROGRESS]{self.progress}[/PROGRESS]",
+                    "progress",
+                    {"phase": "testcase", "progress": self.progress}
+                ))
+        except Exception as e:
+            import logging
+            logging.error(f"WebSocket推送失败: {e}")
     
     async def mark_complete(self, result: dict = None):
         """标记任务完成"""
+        from app.database import ensure_db_connection
+        
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            import logging
+            logging.warning(f"数据库连接不可用，跳过任务完成标记: task_id={self.task_id}")
+            return
+        
         self.status = "completed"
         self.progress = 100
         self.completed_at = datetime.now()
@@ -201,6 +269,14 @@ class AITestTask(models.Model):
     
     async def mark_failed(self, error_message: str, error_details: dict = None):
         """标记任务失败"""
+        from app.database import ensure_db_connection
+        
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            import logging
+            logging.warning(f"数据库连接不可用，跳过任务失败标记: task_id={self.task_id}")
+            return
+        
         self.status = "failed"
         self.error_message = error_message
         if error_details:
@@ -210,6 +286,14 @@ class AITestTask(models.Model):
     
     async def mark_cancelled(self):
         """标记任务取消"""
+        from app.database import ensure_db_connection
+        
+        # 确保数据库连接可用
+        if not await ensure_db_connection():
+            import logging
+            logging.warning(f"数据库连接不可用，跳过任务取消标记: task_id={self.task_id}")
+            return
+        
         self.status = "cancelled"
         self.error_message = "用户手动取消"
         self.completed_at = datetime.now()

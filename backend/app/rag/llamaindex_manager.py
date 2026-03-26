@@ -243,16 +243,32 @@ class LlamaIndexIndexManager:
             )
             
             # 使用自定义分块器
+            # 如果内容太短，使用更小的 chunk_size 确保至少产生 1 个切片
+            effective_chunk_size = min(chunk_size, max(50, len(content) // 2 + 1))
             text_splitter = SentenceSplitter(
-                chunk_size=chunk_size,
+                chunk_size=effective_chunk_size,
                 chunk_overlap=overlap
             )
+            
+            logger.info(f"[RAG索引] 开始分块, 原始内容长度={len(content)}, 有效chunk_size={effective_chunk_size}, overlap={overlap}")
             
             # 获取或创建索引
             index = await self._get_or_create_index(collection_name)
             
             # 分块并添加节点
             nodes = text_splitter.get_nodes_from_documents([document])
+            
+            # 如果分块结果为空（内容太短），创建一个包含全部内容的节点
+            if not nodes:
+                logger.warning(f"[RAG索引] 分块结果为空，为内容创建单个节点")
+                from llama_index.core.schema import TextNode
+                node = TextNode(
+                    text=content,
+                    metadata=document.metadata
+                )
+                nodes = [node]
+            
+            logger.info(f"[RAG索引] 分块完成, 生成 {len(nodes)} 个节点")
             
             # 为每个节点添加额外元数据
             for i, node in enumerate(nodes):
@@ -262,7 +278,7 @@ class LlamaIndexIndexManager:
             # 添加到索引
             index.insert_nodes(nodes)
             
-            logger.info(f"已索引 {len(nodes)} 个文档块到集合 {collection_name}")
+            logger.info(f"[RAG索引] 已索引 {len(nodes)} 个文档块到集合 {collection_name}")
             
             return {
                 "success": True,

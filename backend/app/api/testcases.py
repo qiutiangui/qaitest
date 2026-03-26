@@ -262,7 +262,9 @@ async def generate_testcases(data: TestCaseGenerateRequest):
     # 后台启动生成任务
     async def run_generation():
         from app.agents.testcase_agents import run_testcase_generation  # 使用新的并行RAG版本
+        import traceback
         try:
+            logger.info(f"[run_generation] 开始执行，task_id={task_id}")
             await run_testcase_generation(
                 task_id=task_id,
                 project_id=data.project_id,
@@ -270,8 +272,10 @@ async def generate_testcases(data: TestCaseGenerateRequest):
                 version_id=data.version_id,
                 llm_config=data.llm_config,
             )
+            logger.info(f"[run_generation] 执行完成，task_id={task_id}")
         except Exception as e:
             logger.error(f"测试用例生成失败: {e}")
+            logger.error(f"异常详情: {traceback.format_exc()}")
             # 更新任务状态为失败
             task = await AITestTask.get_or_none(task_id=task_id)
             if task:

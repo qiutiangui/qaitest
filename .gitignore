@@ -89,3 +89,5 @@ milvus_data/
 # 上传文件
 uploads/
 backend/uploads/
+.dockerignore
+.codebuddy

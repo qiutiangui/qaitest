@@ -7,14 +7,22 @@ from loguru import logger
 import asyncio
 import json
 
+# 连接池状态标记
+_db_pool_closed = False
+
 
 async def init_db():
     """初始化数据库连接"""
+    global _db_pool_closed
+    
     try:
         await Tortoise.init(
             config=settings.tortoise_orm_config
         )
         logger.info("数据库连接初始化完成")
+        
+        # 重置连接池状态
+        _db_pool_closed = False
 
         # 导入所有模型以确保注册
         from app.models import AgentPromptTemplate, Project, ProjectVersion, VersionSnapshot, Requirement, TestCase, TestStep, TestPlan, TestPlanCase, TestReport, AITestTask, CustomModel  # noqa
@@ -77,12 +85,19 @@ async def init_db():
 
 async def close_db():
     """关闭数据库连接"""
+    global _db_pool_closed
+    _db_pool_closed = True
     await Tortoise.close_connections()
     logger.info("数据库连接已关闭")
 
 
 async def check_db_connection():
     """检查数据库连接状态"""
+    global _db_pool_closed
+    
+    if _db_pool_closed:
+        return False
+        
     try:
         conn = Tortoise.get_connection("default")
         await conn.execute_query("SELECT 1")
@@ -90,3 +105,32 @@ async def check_db_connection():
     except Exception as e:
         logger.warning(f"数据库连接检查失败: {e}")
         return False
+
+
+async def ensure_db_connection():
+    """
+    确保数据库连接可用，如果连接池已关闭则尝试重新初始化
+    """
+    global _db_pool_closed
+    
+    if _db_pool_closed:
+        logger.warning("数据库连接池已关闭，尝试重新初始化...")
+        _db_pool_closed = False
+        await init_db()
+        return True
+    
+    # 检查连接是否可用
+    try:
+        conn = Tortoise.get_connection("default")
+        await conn.execute_query("SELECT 1")
+        return True
+    except Exception as e:
+        logger.warning(f"数据库连接不可用: {e}，尝试重新初始化...")
+        try:
+            _db_pool_closed = False
+            await init_db()
+            return True
+        except Exception as init_error:
+            logger.error(f"数据库重新初始化失败: {init_error}")
+            _db_pool_closed = True
+            return False

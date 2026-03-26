@@ -25,6 +25,235 @@ from app.api.websocket import push_to_websocket
 from app.agents.prompt_loader import PromptLoader
 
 
+def clean_json_content(content: str) -> str:
+    """
+    清理内容中的特殊字符，确保JSON解析正确
+    修复 LLM 输出中可能包含的特殊引号等问题
+    """
+    if not content:
+        return content
+    
+    # 替换中文引号为英文引号
+    content = content.replace('"', '"').replace('"', '"')
+    # 替换中文冒号
+    content = content.replace('：', ':')
+    # 替换中文逗号
+    content = content.replace('，', ',')
+    # 替换中文括号
+    content = content.replace('（', '(').replace('）', ')')
+    
+    return content
+
+
+def _fix_json_format(json_str: str) -> str:
+    """修复常见的JSON格式问题（增强版）"""
+    result = json_str
+    
+    # 0. 修复无效的控制字符
+    result = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', result)
+    
+    # 0.1 智能处理字符串值内的未转义换行符
+    def fix_string_newlines(match):
+        content = match.group(1)
+        content = content.replace('\r\n', '\\n').replace('\n', '\\n')
+        return '"' + content + '"'
+    result = re.sub(r'"((?:[^"\\]|\\.)*)"', fix_string_newlines, result)
+    
+    # 1. 移除单引号，改用双引号
+    result = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", lambda m: '"' + m.group(1).replace('"', '\\"') + '"', result)
+    
+    # 2. 移除JavaScript风格的注释
+    result = re.sub(r'//.*?$', '', result, flags=re.MULTILINE)
+    result = re.sub(r'/\*.*?\*/', '', result, flags=re.DOTALL)
+    
+    # 3. 移除尾随逗号
+    result = re.sub(r',(\s*[}\]])', r'\1', result)
+    
+    # 4. 智能补全缺失逗号
+    result = re.sub(r'}(\s*)(\{[ \t\r\n]*")', r'},\2', result)
+    result = re.sub(r'"(\s*)(\{[ \t\r\n]*")', r'"\1,\2', result)
+    result = re.sub(r'\}(\s*)\{', r'},\1{', result)
+    
+    # 5. 处理裸字符串键
+    result = re.sub(r'([{,]\s*)([a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*)\s*:', 
+                    r'\1"\2":', result)
+    
+    # 6. 智能修复嵌套结构中的逗号问题
+    result = re.sub(r'(")(\s*)("[^:,}\]]+")(\s*)([}\]])', r'\1\3\5', result)
+    result = re.sub(r'(\})([^\s,}\]])"', r'\1, "', result)
+    
+    return result
+
+
+def _parse_json_from_text(text: str, max_repair_attempts: int = 3) -> Optional[List[Dict[str, Any]]]:
+    """增强的JSON解析函数"""
+    if not text:
+        return None
+    
+    text = clean_json_content(text)
+    
+    # 策略1: 尝试直接解析
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return data.get('testcases', data.get('cases', data.get('data', [])))
+    except json.JSONDecodeError:
+        pass
+    
+    # 策略2: 提取markdown代码块
+    code_block_patterns = [
+        r'```json\s*([\s\S]*?)\s*```',
+        r'```\s*([\s\S]*?)\s*```',
+    ]
+    json_str = None
+    for pattern in code_block_patterns:
+        match = re.search(pattern, text)
+        if match:
+            candidate = match.group(1).strip()
+            try:
+                data = json.loads(candidate)
+                if isinstance(data, list):
+                    return data
+                if isinstance(data, dict):
+                    return data.get('testcases', data.get('cases', data.get('data', [])))
+            except json.JSONDecodeError:
+                json_str = candidate
+    
+    # 策略3: 提取数组
+    if json_str is None:
+        first_bracket = text.find('[')
+        last_bracket = text.rfind(']')
+        if first_bracket != -1 and last_bracket > first_bracket:
+            json_str = text[first_bracket:last_bracket + 1]
+    
+    if not json_str:
+        return None
+    
+    # 策略4: 多次修复尝试
+    result = json_str
+    for attempt in range(max_repair_attempts):
+        fixed_json = _fix_json_format(result)
+        try:
+            data = json.loads(fixed_json)
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                return data.get('testcases', data.get('cases', data.get('data', [])))
+        except json.JSONDecodeError:
+            result = fixed_json
+            continue
+    
+    return None
+
+
+def _parse_json_object_list(text: str) -> Optional[List[Dict[str, Any]]]:
+    """从文本中提取JSON对象列表"""
+    objects = []
+    i = 0
+    while i < len(text):
+        if text[i] == '{':
+            depth = 0
+            start = i
+            j = i
+            while j < len(text):
+                if text[j] == '{':
+                    depth += 1
+                elif text[j] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        obj_str = text[start:j+1]
+                        try:
+                            obj = json.loads(obj_str)
+                            if isinstance(obj, dict):
+                                objects.append(obj)
+                        except:
+                            pass
+                        break
+                j += 1
+            i = j + 1
+        else:
+            i += 1
+    return objects if objects else None
+
+
+def _fallback_parse_json(content: str, requirement_name: str = "") -> List[Dict[str, Any]]:
+    """当JSON解析失败时的降级方案"""
+    if not content:
+        return []
+    
+    cases = []
+    
+    # 1. 尝试提取JSON对象
+    try:
+        objects = _parse_json_object_list(content)
+        if objects:
+            for obj in objects[:20]:
+                title = obj.get('title', obj.get('name', ''))
+                if title:
+                    cases.append({
+                        "title": title,
+                        "desc": obj.get('desc', obj.get('description', '')),
+                        "priority": obj.get('priority', '中'),
+                        "preconditions": obj.get('preconditions', ''),
+                        "test_data": obj.get('test_data', ''),
+                        "steps": obj.get('steps', [{"description": "执行测试步骤", "expected_result": "符合预期"}])
+                    })
+            if cases:
+                return cases
+    except Exception:
+        pass
+    
+    # 2. 尝试提取标题模式
+    title_patterns = [
+        r'用例标题[:：]\s*(.+?)(?:\n|$)',
+        r'"title"\s*:\s*"([^"]+)"',
+        r'###?\s+(.+?)(?:\n|$)',
+        r'^\s*[-*]\s+(.+?)$',
+        r'\d+[.、]\s*(.+?)(?:\n|$)',
+    ]
+    
+    titles = []
+    for pattern in title_patterns:
+        matches = re.findall(pattern, content, re.MULTILINE)
+        titles.extend([m.strip() for m in matches if 3 < len(m.strip()) < 100])
+    
+    titles = list(dict.fromkeys(titles))[:20]
+    
+    for title in titles:
+        cases.append({
+            "title": title,
+            "desc": f"由「{title}」生成的测试用例",
+            "priority": "中",
+            "preconditions": "无",
+            "test_data": "",
+            "steps": [{"description": "执行测试步骤", "expected_result": "符合预期"}]
+        })
+    
+    # 3. 如果什么都没找到，使用内容摘要
+    if not cases and content:
+        clean_content = re.sub(r'```[\s\S]*?```', '', content)
+        clean_content = re.sub(r'#{1,6}\s+', '', clean_content)
+        clean_content = re.sub(r'\*\*(.*?)\*\*', r'\1', clean_content)
+        clean_content = re.sub(r'\n+', '\n', clean_content).strip()
+        
+        title = clean_content[:80] if len(clean_content) > 80 else clean_content
+        desc = clean_content[:500] if len(clean_content) > 500 else clean_content
+        
+        if title:
+            cases.append({
+                "title": title or requirement_name or "AI生成的测试用例",
+                "desc": desc or "根据需求自动生成的测试用例",
+                "priority": "中",
+                "preconditions": "无",
+                "test_data": "",
+                "steps": [{"description": "执行测试步骤", "expected_result": "符合预期"}]
+            })
+    
+    return cases
+
+
 # ============ 日志推送 ============
 
 async def push_log(task_id: str, agent_name: str, content: str, message_type: str = "thinking", extra_data: dict = None):
@@ -143,6 +372,10 @@ def parse_json_response(content: str) -> List[Dict[str, Any]]:
         return []
     
     content_clean = content.strip()
+    
+    # 先清理特殊字符
+    content_clean = clean_json_content(content_clean)
+    
     if content_clean.startswith('```'):
         content_clean = re.sub(r'^```(?:json)?\s*', '', content_clean)
         content_clean = re.sub(r'\s*```$', '', content_clean)
@@ -203,6 +436,10 @@ def parse_testcase_json(content: str) -> List[Dict[str, Any]]:
         return []
     
     content_clean = content.strip()
+    
+    # 先清理特殊字符
+    content_clean = clean_json_content(content_clean)
+    
     if content_clean.startswith('```'):
         content_clean = re.sub(r'^```(?:json)?\s*', '', content_clean)
         content_clean = re.sub(r'\s*```$', '', content_clean)
@@ -590,28 +827,57 @@ async def run_testcase_generation(task_id: str, project_id: Optional[int], versi
                 result = await generate_agent.run(task=task_prompt)
                 testcase_content = result.messages[-1].content
                 
-                # 解析JSON
+                # 解析JSON (使用增强的解析器)
                 try:
-                    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', testcase_content)
-                    if json_match:
-                        testcase_content = json_match.group(1)
+                    # 尝试健壮解析
+                    parsed = _parse_json_from_text(testcase_content)
+                    if parsed:
+                        testcases_data = parsed
+                    else:
+                        # 备用方案：直接尝试解析
+                        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', testcase_content)
+                        if json_match:
+                            testcase_content = json_match.group(1)
+                        testcases_data = json.loads(testcase_content.strip())
                     
-                    testcases_data = json.loads(testcase_content.strip())
                     if isinstance(testcases_data, dict):
                         testcases_data = testcases_data.get("testcases", [testcases_data])
                     
+                    if not isinstance(testcases_data, list):
+                        testcases_data = []
+                        
                     for tc_data in testcases_data:
                         tc_data["requirement_id"] = req_id
                         tc_data["requirement_name"] = requirement.name
                         generated_cases.append(tc_data)
                     
-                    # 豆包风格：流式输出每个用例
                     await push_log(task_id, "TestCaseGenerateAgent", f"✓ {requirement.name}: 生成 {len(testcases_data)} 个用例", "stream")
                     
                 except json.JSONDecodeError as e:
-                    logger.error(f"JSON解析失败: {e}")
-                    # 静默执行，不打印解析失败日志
-                    # await push_log(task_id, "用例生成", f"⚠️ [{idx+1}/{total}] 测试用例格式解析失败", "thinking")
+                    # 使用降级方案
+                    logger.warning(f"JSON解析失败，尝试降级方案: {e}")
+                    fallback_cases = _fallback_parse_json(testcase_content, requirement.name)
+                    
+                    if fallback_cases:
+                        for tc_data in fallback_cases:
+                            tc_data["requirement_id"] = req_id
+                            tc_data["requirement_name"] = requirement.name
+                            generated_cases.append(tc_data)
+                        await push_log(task_id, "TestCaseGenerateAgent", f"⚠️ {requirement.name}: 降级生成 {len(fallback_cases)} 个用例", "thinking")
+                    else:
+                        # 创建默认用例
+                        default_case = {
+                            "title": f"{requirement.name} - 测试用例",
+                            "desc": f"由需求「{requirement.name}」自动生成的测试用例",
+                            "priority": "中",
+                            "preconditions": "无",
+                            "test_data": "",
+                            "steps": [{"description": "执行测试步骤", "expected_result": "符合预期"}],
+                            "requirement_id": req_id,
+                            "requirement_name": requirement.name
+                        }
+                        generated_cases.append(default_case)
+                        await push_log(task_id, "TestCaseGenerateAgent", f"⚠️ {requirement.name}: 创建默认用例", "thinking")
                     
             except Exception as e:
                 logger.error(f"生成测试用例失败: {e}")
